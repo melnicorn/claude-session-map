@@ -1,0 +1,19 @@
+# Older versions kept published links here; history now lives in ~/.claude/session-map
+published.json
+
+# Generated maps embed prompt excerpts and commit messages from your sessions
+*.html
+!assets/template.html
+*.json.out
+work/
+
+# Local tooling
+.claude/
+.DS_Store
+__pycache__/
+
+# Written by MCP servers that start in this folder
+audit.log
+
+# Demo output (regenerate with demo/generate_demo.py)
+demo/data/

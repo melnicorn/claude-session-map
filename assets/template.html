@@ -1,0 +1,779 @@
+<title>Session Line Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: transit wall map. Header strip with session tabs, a fare-board of totals, a control bar, one wide zoomable line map, the line directory, then the milestone log. */
+:root{
+  --paper:#F1F3F0; --panel:#FFFFFF; --ink:#13171B; --muted:#5A626A; --rule:#D2D7D3; --station:#FFFFFF; --accent:#0B5FA5;
+  --ok:#1E8A4C; --bad:#C62828;
+  --l0:#D62E2E; --l1:#0A6BC2; --l2:#0E8F55; --l3:#E07B00; --l4:#8A3FA0; --l5:#9A5A2E;
+  --l6:#00949E; --l7:#C93583; --l8:#B38F00; --l9:#4762D6; --l10:#5F8A1C; --l11:#A8354A;
+  --font-display:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-body:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-data:"Overpass Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1216; --panel:#151B20; --ink:#E6EAED; --muted:#96A0A9; --rule:#28313A; --station:#0D1216; --accent:#5AA9F0;
+    --ok:#3CC47A; --bad:#FF6B6B;
+    --l0:#F25555; --l1:#3D95E8; --l2:#2DB877; --l3:#F5992E; --l4:#B26BCB; --l5:#C68452;
+    --l6:#2BC0C9; --l7:#E7609F; --l8:#DDB52A; --l9:#7C93F2; --l10:#8CB848; --l11:#D9637A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1216; --panel:#151B20; --ink:#E6EAED; --muted:#96A0A9; --rule:#28313A; --station:#0D1216; --accent:#5AA9F0;
+  --ok:#3CC47A; --bad:#FF6B6B;
+  --l0:#F25555; --l1:#3D95E8; --l2:#2DB877; --l3:#F5992E; --l4:#B26BCB; --l5:#C68452;
+  --l6:#2BC0C9; --l7:#E7609F; --l8:#DDB52A; --l9:#7C93F2; --l10:#8CB848; --l11:#D9637A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+header.top{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between;border-bottom:6px solid var(--ink);padding-bottom:16px}
+.brand{display:flex;gap:14px;align-items:flex-start;min-width:0}
+.glyph{flex:none;width:30px;height:30px;border-radius:50%;border:7px solid var(--ink);background:var(--station);margin-top:6px}
+.eyebrow{font-family:var(--font-data);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--font-display);font-weight:800;font-size:clamp(24px,3.4vw,38px);line-height:1.1;margin:2px 0 4px;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+button{font:600 13px/1 var(--font-body);color:var(--ink);background:var(--panel);border:2px solid var(--ink);border-radius:999px;padding:8px 13px 6px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+button:focus-visible,.row:focus-visible,.hit:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tabs button .dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}
+.tabs button[aria-selected="true"],.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.tabs button[aria-selected="true"] .dot{background:var(--paper)}
+
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.tile{background:var(--panel);padding:14px 16px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .k{font-family:var(--font-data);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-family:var(--font-data);font-weight:600;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.2}
+.tile .n{font-size:12.5px;color:var(--muted)}
+.tile.lead .v{color:var(--accent)}
+
+.mapcard{background:var(--panel);border:1px solid var(--rule)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--rule)}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ctl > .k{font-family:var(--font-data);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-2px}
+.seg button:first-child{border-radius:999px 0 0 999px;margin-left:0}
+.seg button:last-child{border-radius:0 999px 999px 0}
+.chip{border-width:1.5px;font-weight:600;font-size:12.5px;padding:6px 11px 5px}
+.chip[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
+.chip svg{flex:none}
+.crumb{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--rule);font-size:14px;flex-wrap:wrap}
+.crumb a{color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.crumb .here{font-weight:700;display:inline-flex;gap:8px;align-items:center}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--muted);align-items:center;padding:10px 16px;border-top:1px solid var(--rule)}
+.legend span{display:inline-flex;gap:7px;align-items:center}
+.legend svg{flex:none}
+.scroller{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+#map{display:block;cursor:crosshair;user-select:none;-webkit-user-select:none}
+#map text{font-family:var(--font-body)}
+#map .lbl{font-size:11.5px;font-weight:600;fill:var(--ink);paint-order:stroke;stroke:var(--panel);stroke-width:4px;stroke-linejoin:round}
+#map .lbl .d{font-family:var(--font-data);font-weight:400;fill:var(--muted)}
+#map .ax{font-family:var(--font-data);font-size:10.5px;fill:var(--muted)}
+#map .gap{font-family:var(--font-data);font-size:10px;fill:var(--muted);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+#map .mdl{font-family:var(--font-data);font-size:10.5px;font-weight:600;fill:var(--accent);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+#map .snum{font-family:var(--font-data);font-size:9.5px;fill:var(--muted)}
+#map .cnt{font-family:var(--font-data);font-size:9px;font-weight:600;fill:var(--ink);paint-order:stroke;stroke:var(--panel);stroke-width:3px}
+#map .ln{transition:opacity .15s}
+#map.dim .ln{opacity:.14}
+#map.dim .ln.hot{opacity:1}
+#map .hit{cursor:pointer}
+
+h2{font-family:var(--font-display);font-weight:800;font-size:20px;margin:0 0 10px;letter-spacing:-.005em}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--rule)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--font-data);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:400;text-align:left;padding:10px 12px;border-bottom:2px solid var(--ink);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--font-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nm{display:flex;gap:10px;align-items:center;min-width:240px}
+.sw{flex:none;width:22px;height:8px;border-radius:4px}
+.sw.side{height:10px;border:3px solid currentColor;background:var(--panel)!important}
+.tag{font-family:var(--font-data);font-size:10.5px;color:var(--muted);border:1px solid var(--rule);padding:1px 6px 0;border-radius:4px;white-space:nowrap}
+.row{cursor:pointer}
+.row:hover td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.ms{display:inline-flex;gap:8px;font-family:var(--font-data);font-size:12px;color:var(--muted);white-space:nowrap}
+details.log summary{cursor:pointer;font-family:var(--font-display);font-weight:800;font-size:20px;list-style:none;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+details.log summary::-webkit-details-marker{display:none}
+details.log summary::before{content:"▸";font-size:14px;transition:transform .15s}
+details.log[open] summary::before{transform:rotate(90deg)}
+details.log summary .n{font-family:var(--font-body);font-weight:400;font-size:14px;color:var(--muted)}
+details.log .tablewrap{margin-top:12px;max-height:520px;overflow:auto}
+.log td a{color:var(--accent)}
+.notes{color:var(--muted);font-size:13.5px;max-width:74ch;display:flex;flex-direction:column;gap:6px}
+.notes p{margin:0}
+.notes code{font-family:var(--font-data);font-size:12.5px}
+
+#tip{position:fixed;z-index:20;max-width:360px;background:var(--ink);color:var(--paper);padding:10px 12px;font-size:13px;line-height:1.45;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#tip b{display:block;font-size:13.5px;margin-bottom:2px}
+#tip .m{font-family:var(--font-data);font-size:11.5px;opacity:.78}
+#tip .q{margin-top:6px;font-style:italic;opacity:.92}
+#tip ul{margin:4px 0 0;padding-left:16px}
+#tip .act{margin-top:6px;font-family:var(--font-data);font-size:11px;opacity:.7}
+@media (prefers-reduced-motion: reduce){#map .ln{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="glyph" aria-hidden="true"></div>
+      <div>
+        <div class="eyebrow" id="eyebrow">Session line map</div>
+        <h1 id="title">Session</h1>
+        <div class="sub" id="sub"></div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs" aria-label="Sessions"></nav>
+  </header>
+
+  <section class="board" id="board" aria-label="Totals"></section>
+
+  <section class="mapcard" aria-label="Line map">
+    <div class="controls">
+      <div class="ctl"><span class="k">Zoom</span>
+        <span class="seg"><button type="button" id="zout" aria-label="Zoom out">−</button><button type="button" id="zfit">Fit</button><button type="button" id="zin" aria-label="Zoom in">+</button></span>
+        <span class="tag" id="zlabel">100%</span>
+      </div>
+      <div class="ctl"><span class="k">Line weight</span>
+        <span class="seg"><button type="button" id="wtime" aria-pressed="true">Time</button><button type="button" id="wcost" aria-pressed="false">Cost rate</button></span>
+      </div>
+      <div class="ctl" id="chips"><span class="k">Show</span></div>
+    </div>
+    <div class="crumb" id="crumb"></div>
+    <div class="scroller" id="scroller"><svg id="map" role="img" aria-label="Line map of the session"></svg></div>
+    <div class="legend">
+      <span><svg width="34" height="10"><line x1="3" y1="5" x2="31" y2="5" stroke="var(--ink)" stroke-width="7" stroke-linecap="round"/></svg>Main session working</span>
+      <span><svg width="34" height="10"><line x1="3" y1="5" x2="31" y2="5" stroke="var(--ink)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/></svg>Waiting or paused</span>
+      <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--station)" stroke="var(--ink)" stroke-width="2.5"/></svg>Your message</span>
+      <span><svg width="34" height="10"><line x1="3" y1="5" x2="31" y2="5" stroke="var(--l1)" stroke-width="6" stroke-linecap="round"/></svg>Subagent</span>
+      <span><svg width="34" height="12"><line x1="4" y1="6" x2="30" y2="6" stroke="var(--l4)" stroke-width="9" stroke-linecap="round"/><line x1="4" y1="6" x2="30" y2="6" stroke="var(--panel)" stroke-width="3" stroke-linecap="round"/></svg>Linked session</span>
+      <span><svg width="18" height="14"><rect x="2" y="2" width="14" height="10" rx="5" fill="var(--station)" stroke="var(--ink)" stroke-width="2.5"/></svg>Message between sessions</span>
+      <span><svg width="18" height="14"><path d="M4 12 L9 2 M9 12 L14 2" stroke="var(--muted)" stroke-width="1.6"/></svg>Time skipped</span>
+      <span id="legend-ex" hidden><svg width="34" height="12"><rect x="3" y="1" width="28" height="10" rx="5" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="2 2"/></svg>Making maps (left out)</span>
+      <span id="weightnote" hidden>Line width shows API-equivalent spend per minute</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Line directory</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Line</th><th>Model</th><th class="num">Working</th><th class="num">Elapsed</th><th class="num">Output tokens</th><th class="num">Cost</th><th class="num">Tool calls</th><th>Milestones</th></tr></thead>
+        <tbody id="dirbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details class="log" id="log">
+    <summary>Milestone log <span class="n" id="logsum"></span></summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>When</th><th>Line</th><th>What</th></tr></thead>
+        <tbody id="logbody"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <section class="notes">
+    <h2>How it's measured</h2>
+    <p>Everything comes from the transcript files Claude Code keeps on disk: one for each session and one for each subagent, with every event timestamped when it was written.</p>
+    <p><b>Main session working time</b> adds up the gaps between events while Claude was mid-turn. Gaps that end in your next message count as waiting on you. Gaps that end with a subagent reporting back, or a message from another session, count as waiting too. Any single gap over 15 minutes counts as idle. <b>Subagent working time</b> adds up stretches of activity, and a pause over 10 minutes (a rate limit, say) splits the line.</p>
+    <p><b>Making maps</b> isn't counted. A turn that runs <code>/session-map</code> (or asks for a map in words) is left out from that point to the end of the turn: its time, cost, tool calls and milestones. It shows on the main line as a dashed outline. Build with <code>--include-map-work</code> to count it.</p>
+    <p><b>Linked sessions</b> are sessions this one started, sent messages to, or received messages from. They're drawn only for the part of their life that overlaps this session.</p>
+    <p><b>Cost</b> prices every API response at list prices from <span id="asof"></span>: input, 5-minute and 1-hour cache writes, cache reads and output, per model. On a Claude subscription it shows what the same work would cost on the API, not what you paid.</p>
+    <p><b>Milestones</b>: a commit is a <code>git commit</code> that succeeded; a test run is a recognised test command, marked failed when it exited with an error. PRs come from <code>gh pr create</code> and the app's PR links; artifacts are successful publishes.</p>
+    <p>The horizontal axis is scaled to working time. Quiet stretches shrink to a short break labelled with the time skipped. Timestamps mark when events were written, so model thinking time and slow tool calls count as working.</p>
+  </section>
+</div>
+<div id="tip" hidden></div>
+
+<script type="application/json" id="data">/*DATA*/</script>
+<script>
+(function(){
+  const RAW = JSON.parse(document.getElementById('data').textContent);
+  const SESSIONS = RAW.sessions, META = RAW.meta;
+  const KEYS = Object.keys(SESSIONS);
+  const NS = 'http://www.w3.org/2000/svg';
+  const col = i => `var(--l${((i % 12) + 12) % 12})`;
+  const svg = document.getElementById('map'), tip = document.getElementById('tip'), scroller = document.getElementById('scroller');
+
+  // ---------- formatting ----------
+  const dur = s => { s = Math.max(0, Math.round(s)); if (s < 60) return s + 's'; const m = Math.round(s/60); if (m < 60) return m + 'm'; const h = Math.floor(m/60), r = m % 60; return h + 'h' + (r ? ' ' + String(r).padStart(2,'0') + 'm' : ''); };
+  const clock = t => new Date(t*1000).toLocaleString([], {weekday:'short', hour:'numeric', minute:'2-digit'});
+  const day = t => new Date(t*1000).toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+  const hm = t => new Date(t*1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  const money = c => c >= 100 ? '$' + Math.round(c).toLocaleString() : '$' + (c || 0).toFixed(2);
+  const ktok = n => n >= 1e6 ? (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n/1e3) + 'k' : String(n || 0);
+  const model = m => { const r = /claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?/.exec(m || ''); return r ? r[1][0].toUpperCase() + r[1].slice(1) + ' ' + r[2] + (r[3] ? '.' + r[3] : '') : (m || '—'); };
+  const models = list => { const seq = (list || []).map(x => model(x[1])).filter((m, i, a) => i === 0 || m !== a[i-1]); return (seq.length > 4 ? [...seq.slice(0, 2), '…', ...seq.slice(-1)] : seq).join(' → ') || '—'; };
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+  // ---------- milestone kinds ----------
+  const KINDS = {
+    pr:       {name:'PRs',        one:'Pull request',    rank:5, filter:'pr'},
+    artifact: {name:'Artifacts',  one:'Published',       rank:4, filter:'artifact'},
+    testfail: {name:'Tests',      one:'Test run failed', rank:3, filter:'test'},
+    commit:   {name:'Commits',    one:'Commit',          rank:2, filter:'commit'},
+    testpass: {name:'Tests',      one:'Test run passed', rank:1, filter:'test'},
+  };
+  const PLURAL = {pr:'pull requests', artifact:'artifacts published', testfail:'test runs failed', commit:'commits', testpass:'test runs passed'};
+  const FILTERS = [['commit','Commits'],['pr','PRs'],['test','Tests'],['artifact','Artifacts']];
+  function glyph(kind, x, y, g){
+    const halo = {stroke:'var(--panel)', 'stroke-width':1.6};
+    if (kind === 'commit') return el('circle', {cx:x, cy:y, r:3.4, fill:'var(--ink)', ...halo}, g);
+    if (kind === 'pr'){ const r = el('g', {}, g); el('rect', {x:x-9, y:y-6, width:18, height:12, rx:3, fill:'var(--accent)', ...halo}, r); const t = el('text', {x, y:y+3.4, 'text-anchor':'middle', 'font-size':8, 'font-weight':800, fill:'var(--panel)'}, r); t.textContent = 'PR'; return r; }
+    if (kind === 'artifact') return el('rect', {x:x-4, y:y-4, width:8, height:8, transform:`rotate(45 ${x} ${y})`, fill:'var(--panel)', stroke:'var(--accent)', 'stroke-width':2.2}, g);
+    if (kind === 'testpass') return el('circle', {cx:x, cy:y, r:3.4, fill:'var(--ok)', ...halo}, g);
+    return el('path', {d:`M${x} ${y-5.5} L${x+5.5} ${y+4} L${x-5.5} ${y+4} Z`, fill:'var(--bad)', ...halo}, g);
+  }
+  function legendGlyph(kind){
+    const s = document.createElementNS(NS, 'svg'); s.setAttribute('width', 20); s.setAttribute('height', 14);
+    glyph(kind, 10, 7, s); return s.outerHTML;
+  }
+
+  // ---------- state ----------
+  const view = { key: KEYS[0], focus: null, zoom: 1, weight: 'time', show: {commit:true, pr:true, test:true, artifact:true} };
+  let current = null; // last render: {X, invX, width}
+
+  function lineList(d){
+    // every drawable line with a stable id
+    const L = [];
+    d.agents.forEach((a, i) => L.push({id: 'a' + i, kind: 'agent', i, a, color: col(i), name: a.desc}));
+    (d.linked || []).forEach((s, i) => L.push({id: 's' + i, kind: 'linked', i, a: s, color: col(d.agents.length + i), name: s.title}));
+    return L;
+  }
+
+  // ---------- time warp ----------
+  function warp(intervals, lo, hi, widthTarget){
+    let iv = intervals.map(s => [Math.max(s[0], lo), Math.min(s[1], hi)]).filter(s => s[1] >= s[0]);
+    iv.push([lo, lo], [hi, hi]);
+    iv.sort((a,b) => a[0] - b[0]);
+    const MERGE = 180, busy = [];
+    for (const [a,b] of iv){ const L = busy[busy.length-1]; if (L && a <= L[1] + MERGE) L[1] = Math.max(L[1], b); else busy.push([a,b]); }
+    const total = busy.reduce((s,[a,b]) => s + b - a, 0);
+    const K0 = Math.max(0.06, Math.min(2.5, widthTarget / Math.max(total, 1)));
+    const K = K0 * view.zoom;
+    const BREAK = 34, LEFT = 46;
+    const xs = [], gw = []; let x = LEFT;
+    busy.forEach((b,i) => { xs.push(x); x += (b[1]-b[0]) * K; if (i < busy.length-1){ const g = Math.min(BREAK, (busy[i+1][0]-b[1]) * K); gw.push(g); x += g; } });
+    function X(t){
+      if (t <= busy[0][0]) return xs[0];
+      let lo = 0, hi = busy.length - 1;
+      while (lo < hi){ const m = (lo + hi + 1) >> 1; if (busy[m][0] <= t) lo = m; else hi = m - 1; }
+      const b = busy[lo];
+      if (t <= b[1] || lo === busy.length - 1) return xs[lo] + (Math.min(t, b[1]) - b[0]) * K;
+      return xs[lo] + (b[1]-b[0]) * K + gw[lo] * (t - b[1]) / (busy[lo+1][0] - b[1]);
+    }
+    function invX(px){ let a = lo, b = hi; for (let n = 0; n < 50; n++){ const m = (a + b) / 2; if (X(m) < px) a = m; else b = m; } return a; }
+    return { busy, xs, gw, K, X, invX, end: x };
+  }
+  const inSegs = (segs, t) => segs.some(s => t >= s[0] && t <= s[1]);
+  const clipSegs = (segs, lo, hi) => segs.map(s => [Math.max(s[0], lo), Math.min(s[1], hi)]).filter(s => s[1] >= s[0]);
+
+  // ---------- weight ----------
+  function rateWidth(cost, a, b, maxRate, base){
+    if (view.weight !== 'cost' || !maxRate) return base;
+    const r = (cost || 0) / Math.max(b - a, 120);
+    return 2.5 + 11.5 * Math.sqrt(Math.min(1, r / maxRate));
+  }
+
+  // ---------- render ----------
+  function render(){
+    const d = SESSIONS[view.key];
+    const ALL = lineList(d);
+    const focus = view.focus ? ALL.find(l => l.id === view.focus) : null;
+    const tEnd = Math.max(d.t1, ...d.agents.map(a => a.end));
+    let lo = d.t0, hi = tEnd;
+    if (focus){
+      const a = focus.a;
+      const end = focus.kind === 'agent' ? Math.max(a.end, ...(a.joins.length ? a.joins : [a.end])) : a.end;
+      const pad = Math.max(120, (end - a.start) * 0.04);
+      lo = Math.max(d.t0, a.start - pad); hi = Math.min(tEnd, end + pad);
+    }
+    const lines = focus ? [focus] : ALL;
+    const agents = lines.filter(l => l.kind === 'agent');
+    const sides = lines.filter(l => l.kind === 'linked');
+
+    // intervals and points that shape the axis
+    const iv = [...clipSegs(d.main.segs, lo, hi)];
+    const pt = t => { if (t >= lo && t <= hi) iv.push([t, t]); };
+    agents.forEach(L => { iv.push(...clipSegs(L.a.segs, lo, hi)); pt(L.a.start); pt(L.a.end); L.a.joins.forEach(pt); L.a.resumes.forEach(pt); });
+    sides.forEach(L => { iv.push(...clipSegs(L.a.segs, lo, hi)); pt(L.a.start); pt(L.a.end); L.a.events.forEach(e => pt(e.t)); });
+    d.stations.forEach(s => pt(s.t)); (d.peers || []).forEach(p => pt(p.t));
+    (d.main.excluded || []).forEach(x => { if (x.end >= lo && x.start <= hi) iv.push([Math.max(x.start, lo), Math.min(x.end, hi)]); });
+
+    const target = focus ? Math.max(600, scroller.clientWidth - 140) : 3400;
+    const W = warp(iv, lo, hi, target), X = W.X;
+
+    // cost-rate scale over everything in the session
+    let maxRate = 0;
+    const rateOf = (segs, costs) => segs.forEach((s, i) => { maxRate = Math.max(maxRate, (costs?.[i] || 0) / Math.max(s[1] - s[0], 120)); });
+    rateOf(d.main.segs, d.main.segCost); d.agents.forEach(a => rateOf(a.segs, a.segCost)); (d.linked || []).forEach(s => rateOf(s.segs, s.segCost));
+
+    // layout bands: axis, model tags, linked sessions, upper agent lanes, trunk, lower agent lanes, strip
+    const LANE = 26, SLANE = 34, AXIS = 20, MODELY = 40;
+    const TOPL = 62;
+    const sideY = i => TOPL + 12 + i * SLANE;
+    const sidesBottom = sides.length ? sideY(sides.length - 1) + 22 : TOPL;
+
+    const up = [], dn = [];
+    const placed = agents.map(L => {
+      const a = L.a;
+      const join = Math.max(a.end, ...(a.joins.length ? a.joins : [a.end]));
+      const x0 = X(Math.max(a.start, lo)), xj = X(Math.min(join, hi));
+      const label = a.desc + ' · ' + dur(a.active) + ' · ' + model(a.model);
+      const labelW = label.length * 6.2 + 10;
+      let lane = null;
+      for (let depth = 0; lane === null; depth++){
+        for (const side of [-1, 1]){
+          const arr = side < 0 ? up : dn;
+          const cw = 14 + Math.min(depth, 6) * 7;
+          const lineEnd = Math.max(xj - cw, x0 + cw + 6);
+          const reserve = Math.max(lineEnd + cw, x0 + cw + labelW) + 12;
+          if ((arr[depth] ?? -1e9) < x0 - 6){ arr[depth] = reserve; lane = {side, depth, cw, lineEnd}; break; }
+        }
+      }
+      return {...L, join, x0, xj, label, ...lane};
+    });
+    const U = up.length, Dn = dn.length;
+    const T = sidesBottom + 20 + U * LANE + 14;
+    const laneY = (side, depth) => side < 0 ? T - (depth + 1) * LANE : T + 40 + depth * LANE;
+    const STRIP = 50;
+    const stripBase = (Dn ? laneY(1, Dn - 1) + 30 : T + 46) + STRIP;
+    const width = Math.ceil(W.end + 70), height = Math.ceil(stripBase + 28);
+
+    svg.innerHTML = '';
+    svg.setAttribute('width', width); svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.classList.remove('dim');
+    const gAxis = el('g', {}, svg), gTrunk = el('g', {}, svg), gLines = el('g', {}, svg), gTop = el('g', {}, svg), gMs = el('g', {}, svg);
+
+    // axis labels and skipped time
+    let lastAx = -1e9;
+    W.busy.forEach((b, i) => {
+      const gapBefore = i ? b[0] - W.busy[i-1][1] : Infinity;
+      if (gapBefore > 600 && W.xs[i] - lastAx > 92){
+        el('line', {x1: W.xs[i], y1: AXIS + 4, x2: W.xs[i], y2: height - 30, stroke: 'var(--rule)', 'stroke-width': 1}, gAxis);
+        const t = el('text', {x: W.xs[i] + 4, y: AXIS, class: 'ax'}, gAxis); t.textContent = clock(b[0]);
+        lastAx = W.xs[i];
+      }
+      if (i < W.busy.length - 1){
+        const g = W.busy[i+1][0] - b[1];
+        if (g > 600){
+          const gx = W.xs[i] + (b[1]-b[0]) * W.K + W.gw[i] / 2;
+          el('path', {d: `M${gx-5} ${T+7} L${gx-1} ${T-7} M${gx+1} ${T+7} L${gx+5} ${T-7}`, stroke: 'var(--muted)', 'stroke-width': 1.6, fill: 'none'}, gTrunk);
+          const t = el('text', {x: gx, y: T + 34, 'text-anchor': 'middle', class: 'gap'}, gTrunk); t.textContent = '+' + dur(g);
+        }
+      }
+    });
+
+    // model tags for the main session
+    (d.main.models || []).forEach((m, i) => {
+      if (m[0] > hi) return;
+      const mx = X(Math.max(m[0], lo));
+      if (i && m[0] < lo) return;
+      el('line', {x1: mx, y1: MODELY + 4, x2: mx, y2: T - 8, stroke: 'var(--accent)', 'stroke-width': 1, 'stroke-dasharray': '1 3', opacity: .7}, gAxis);
+      const t = el('text', {x: mx + 4, y: MODELY, class: 'mdl'}, gAxis); t.textContent = (i ? '→ ' : '') + model(m[1]);
+    });
+
+    // trunk
+    const x0 = W.xs[0], x1 = W.end;
+    el('line', {x1: x0, y1: T, x2: x1, y2: T, stroke: 'var(--ink)', 'stroke-width': 2, 'stroke-dasharray': '1 5', 'stroke-linecap': 'round'}, gTrunk);
+    d.main.segs.forEach((s, i) => {
+      if (s[1] < lo || s[0] > hi) return;
+      const a = Math.max(s[0], lo), b = Math.min(s[1], hi);
+      el('line', {x1: X(a), y1: T, x2: Math.max(X(b), X(a) + 0.5), y2: T, stroke: 'var(--ink)', 'stroke-width': rateWidth(d.main.segCost?.[i], s[0], s[1], maxRate, 7), 'stroke-linecap': 'round'}, gTrunk);
+    });
+    (d.main.excluded || []).forEach(x => {
+      if (x.end < lo || x.start > hi) return;
+      const a = X(Math.max(x.start, lo)), b = Math.max(X(Math.min(x.end, hi)), a + 8);
+      el('rect', {x: a, y: T - 5, width: b - a, height: 10, rx: 5, fill: 'var(--panel)', stroke: 'var(--muted)', 'stroke-width': 1.4, 'stroke-dasharray': '2 2'}, gTrunk);
+      const h = el('rect', {x: a - 4, y: T - 9, width: b - a + 8, height: 18, fill: 'transparent', class: 'hit'}, gTrunk);
+      bindTip(h, () => `<b>Making a session map</b><div class="m">${esc(clock(x.start))} · left out of the totals</div><div>${dur(x.active)} working · ${money(x.cost)}</div>`, null, null);
+    });
+    el('rect', {x: x0 - 30, y: T - 12, width: 22, height: 24, rx: 3, fill: 'var(--ink)'}, gTrunk);
+    const mt = el('text', {x: x0 - 19, y: T + 4.5, 'text-anchor': 'middle', fill: 'var(--paper)', 'font-size': 12, 'font-weight': 800}, gTrunk); mt.textContent = 'M';
+    const trunkHit = el('rect', {x: x0, y: T - 6, width: x1 - x0, height: 12, fill: 'transparent'}, gTrunk);
+    bindTip(trunkHit, () => `<b>Main session</b><div class="m">${esc(models(d.main.models))}</div><div>Working ${dur(d.main.active)} · ${money(d.main.cost)} · ${ktok(d.main.tokens.output)} output tokens</div>`, null, null);
+
+    const msQueue = []; // [lineColorKey, y, milestones, lineName]
+    msQueue.push({y: T - 15, list: d.main.milestones, name: 'Main session'});
+
+    // agent lines
+    placed.forEach(L => {
+      const {a, side, depth, cw} = L, y = laneY(side, depth), c = L.color;
+      const xs0 = L.x0, xe = L.lineEnd;
+      const g = el('g', {class: 'ln', 'data-line': L.id}, gLines);
+      const startsIn = a.start >= lo, endsIn = L.join <= hi;
+      const dep = startsIn ? `M${xs0} ${T} C${xs0 + cw*0.55} ${T} ${xs0 + cw*0.45} ${y} ${xs0 + cw} ${y}` : `M${xs0} ${y} L${xs0 + cw} ${y}`;
+      const ret = endsIn ? `M${xe} ${y} C${xe + cw*0.55} ${y} ${xe + cw*0.45} ${T} ${xe + cw} ${T}` : `M${xe} ${y} L${xe + cw} ${y}`;
+      el('line', {x1: xs0 + cw, y1: y, x2: xe, y2: y, stroke: c, 'stroke-width': 2.5, 'stroke-dasharray': '1 5', 'stroke-linecap': 'round'}, g);
+      el('path', {d: dep, stroke: c, 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round'}, g);
+      el('path', {d: ret, stroke: c, 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round'}, g);
+      a.segs.forEach((s, i) => {
+        if (s[1] < lo || s[0] > hi) return;
+        const sx = Math.min(Math.max(X(Math.max(s[0], lo)), xs0 + cw), xe), ex = Math.min(Math.max(X(Math.min(s[1], hi)), sx + 1), xe);
+        el('line', {x1: sx, y1: y, x2: ex, y2: y, stroke: c, 'stroke-width': rateWidth(a.segCost?.[i], s[0], s[1], maxRate, 6), 'stroke-linecap': 'round'}, g);
+      });
+      a.resumes.forEach(r => {
+        if (r < lo || r > hi) return;
+        const rx = Math.min(Math.max(X(r), xs0 + cw), xe);
+        el('line', {x1: rx, y1: T, x2: rx, y2: y, stroke: 'var(--ink)', 'stroke-width': 1.3, 'stroke-dasharray': '2 3'}, g);
+        el('rect', {x: rx - 3.5, y: y - 3.5, width: 7, height: 7, transform: `rotate(45 ${rx} ${y})`, fill: 'var(--station)', stroke: 'var(--ink)', 'stroke-width': 1.6}, g);
+      });
+      a.joins.slice(0, -1).forEach(j => {
+        if (j < lo || j > hi) return;
+        const jx = Math.min(Math.max(X(j), xs0 + cw), xe);
+        el('line', {x1: jx, y1: y - 6, x2: jx, y2: y + 6, stroke: 'var(--ink)', 'stroke-width': 2}, g);
+      });
+      if (startsIn) el('circle', {cx: xs0, cy: T, r: 3.6, fill: c}, g);
+      if (endsIn) el('circle', {cx: xe + cw, cy: T, r: 4.2, fill: 'var(--station)', stroke: c, 'stroke-width': 2.4}, g);
+      const lbl = el('text', {x: xs0 + cw + 4, y: side < 0 ? y - 8 : y + 18, class: 'lbl'}, g);
+      lbl.textContent = a.desc + ' ';
+      const ds = el('tspan', {class: 'd'}, lbl); ds.textContent = dur(a.active) + ' · ' + model(a.model);
+      const hit = el('path', {d: (startsIn ? dep : `M${xs0} ${y}`) + ` L${xe} ${y} ` + (endsIn ? ret.slice(ret.indexOf('C')) : `L${xe + cw} ${y}`), stroke: 'transparent', 'stroke-width': 16, fill: 'none', class: 'hit', tabindex: 0}, g);
+      const hitL = el('rect', {x: xs0 + cw, y: side < 0 ? y - 22 : y + 4, width: Math.max(xe - xs0 - cw, L.label.length * 6.2), height: 20, fill: 'transparent', class: 'hit'}, g);
+      const html = () => `<b>${esc(a.desc)}</b><div class="m">${esc(models(a.models))} · ${esc(a.type || 'agent')}${a.bg ? ' · background' : ''}</div>` +
+        `<div>Working ${dur(a.active)}${a.segs.length > 1 ? ` across ${a.segs.length} stretches` : ''} · ${a.tools} tool calls</div>` +
+        `<div>${money(a.cost)} · ${ktok(a.tokens.output)} output tokens</div>` +
+        `<div class="m">Launched ${esc(clock(a.start))} · back ${esc(clock(L.join))} (${dur(L.join - a.start)} later)</div>` +
+        (a.resumes.length ? `<div class="m">Nudged ${a.resumes.length}× by the main session</div>` : '') +
+        `<div class="act">${view.focus ? 'Esc or the breadcrumb to go back' : 'Click to zoom into this line'}</div>`;
+      [hit, hitL].forEach(h => { bindTip(h, html, L.id, L.id); });
+      msQueue.push({y, list: a.milestones, name: a.desc, clampLo: xs0 + cw, clampHi: xe});
+    });
+
+    // linked sessions
+    sides.forEach((L, k) => {
+      const s = L.a, y = sideY(k), c = L.color;
+      const g = el('g', {class: 'ln', 'data-line': L.id}, gLines);
+      const sx = X(Math.max(s.start, lo)), ex = Math.max(X(Math.min(s.end, hi)), sx + 4);
+      el('line', {x1: sx, y1: y, x2: ex, y2: y, stroke: c, 'stroke-width': 2.5, 'stroke-dasharray': '1 5', 'stroke-linecap': 'round'}, g);
+      s.segs.forEach((sg, i) => {
+        if (sg[1] < lo || sg[0] > hi) return;
+        const a = X(Math.max(sg[0], lo)), b = Math.max(X(Math.min(sg[1], hi)), a + 1);
+        const w = rateWidth(s.segCost?.[i], sg[0], sg[1], maxRate, 9);
+        el('line', {x1: a, y1: y, x2: b, y2: y, stroke: c, 'stroke-width': Math.max(w, 6), 'stroke-linecap': 'round'}, g);
+        el('line', {x1: a, y1: y, x2: b, y2: y, stroke: 'var(--panel)', 'stroke-width': Math.max(1.5, Math.max(w, 6) / 3), 'stroke-linecap': 'round'}, g);
+      });
+      if (s.before) el('path', {d: `M${sx - 4} ${y} l8 -6 v12 Z`, fill: c, transform: `rotate(180 ${sx} ${y})`}, g);
+      if (s.after) el('path', {d: `M${ex + 4} ${y - 6} l8 6 l-8 6 Z`, fill: c}, g);
+      if (s.startedHere){
+        const st = X(Math.max(s.start, lo));
+        el('path', {d: `M${st} ${T} C${st} ${(T + y) / 2} ${st} ${(T + y) / 2} ${st} ${y}`, stroke: c, 'stroke-width': 4, fill: 'none'}, g);
+      }
+      s.events.forEach(e => {
+        if (e.t < lo || e.t > hi) return;
+        const ix = X(e.t);
+        el('line', {x1: ix, y1: y + 6, x2: ix, y2: T - 6, stroke: c, 'stroke-width': 1.6, 'stroke-dasharray': '3 3'}, g);
+        el('rect', {x: ix - 8, y: T - 6, width: 16, height: 12, rx: 6, fill: 'var(--station)', stroke: 'var(--ink)', 'stroke-width': 2.4}, g);
+        el('rect', {x: ix - 8, y: y - 6, width: 16, height: 12, rx: 6, fill: 'var(--station)', stroke: c, 'stroke-width': 2.4}, g);
+        const ay = e.dir === 'out' ? y + 14 : T - 14;
+        el('path', {d: e.dir === 'out' ? `M${ix - 4} ${ay + 5} L${ix} ${ay} L${ix + 4} ${ay + 5}` : `M${ix - 4} ${ay - 5} L${ix} ${ay} L${ix + 4} ${ay - 5}`, stroke: c, 'stroke-width': 1.8, fill: 'none'}, g);
+        const eh = el('rect', {x: ix - 10, y: y - 8, width: 20, height: T - y + 16, fill: 'transparent', class: 'hit'}, g);
+        bindTip(eh, () => `<b>${e.dir === 'out' ? 'Message to' : e.dir === 'start' ? 'Started' : 'Message from'} “${esc(s.title)}”</b><div class="m">${esc(clock(e.t))}</div>${e.text ? `<div class="q">${esc(e.text)}</div>` : ''}`, L.id, L.id);
+      });
+      const lbl = el('text', {x: sx + 2, y: y - 10, class: 'lbl'}, g);
+      lbl.textContent = s.title + ' ';
+      const ds = el('tspan', {class: 'd'}, lbl); ds.textContent = 'linked session · ' + dur(s.active) + ' here · ' + models(s.models);
+      const hit = el('rect', {x: sx - 4, y: y - 24, width: Math.max(ex - sx + 8, (s.title.length + 30) * 6.2), height: 32, fill: 'transparent', class: 'hit', tabindex: 0}, g);
+      bindTip(hit, () => `<b>${esc(s.title)}</b><div class="m">Linked session · ${esc(models(s.models))}</div>` +
+        `<div>Working ${dur(s.active)} while this session ran${s.activeTotal > s.active + 60 ? ` (${dur(s.activeTotal)} in total)` : ''}</div>` +
+        `<div>${money(s.cost)} here${s.costTotal > s.cost + 0.01 ? ` · ${money(s.costTotal)} in total incl. its subagents` : ''}</div>` +
+        `<div class="m">${s.messages} messages from you · ${s.agents} subagents · ${s.events.length} exchanges with this session</div>` +
+        `<div class="act">${view.focus ? 'Esc or the breadcrumb to go back' : 'Click to zoom into this line'}</div>`, L.id, L.id);
+      msQueue.push({y, list: s.milestones, name: s.title});
+    });
+
+    // stations
+    let lastNum = -1e9;
+    d.stations.forEach((s, i) => {
+      if (s.t < lo || s.t > hi) return;
+      const sx = X(s.t);
+      const next = d.stations[i+1] ? d.stations[i+1].t : Infinity;
+      const work = d.main.segs.reduce((acc, [a,b]) => acc + Math.max(0, Math.min(b, next) - Math.max(a, s.t)), 0);
+      const g = el('g', {}, gTop);
+      el('circle', {cx: sx, cy: T, r: 5.2, fill: 'var(--station)', stroke: 'var(--ink)', 'stroke-width': 2.6}, g);
+      if (sx - lastNum > 20){ const n = el('text', {x: sx, y: T + 20, 'text-anchor': 'middle', class: 'snum'}, g); n.textContent = i + 1; lastNum = sx; }
+      const hit = el('circle', {cx: sx, cy: T, r: 10, fill: 'transparent', class: 'hit'}, g);
+      bindTip(hit, () => `<b>Message ${i+1} · ${esc(clock(s.t))}</b><div>Claude worked ${dur(work)} on this turn</div>${s.text ? `<div class="q">“${esc(s.text)}${s.text.length >= 160 ? '…' : ''}”</div>` : ''}`, null, null);
+    });
+
+    // messages from sessions that couldn't be resolved to a transcript
+    (d.peers || []).forEach(p => {
+      if (p.t < lo || p.t > hi) return;
+      const px = X(p.t);
+      const g = el('g', {}, gTop);
+      el('line', {x1: px, y1: TOPL - 6, x2: px, y2: T - 6, stroke: 'var(--muted)', 'stroke-width': 1.5, 'stroke-dasharray': '3 3'}, g);
+      el('rect', {x: px - 8, y: T - 6, width: 16, height: 12, rx: 6, fill: 'var(--station)', stroke: 'var(--ink)', 'stroke-width': 2.6}, g);
+      const hit = el('rect', {x: px - 12, y: TOPL - 10, width: 24, height: T - TOPL + 16, fill: 'transparent', class: 'hit'}, g);
+      bindTip(hit, () => `<b>Message from “${esc(p.from)}”</b><div class="m">${esc(clock(p.t))}</div><div class="q">${esc(p.text)}</div>`, null, null);
+    });
+
+    // milestones, grouped when they would overlap
+    msQueue.forEach(q => {
+      const items = (q.list || []).filter(m => m.t >= lo && m.t <= hi && view.show[KINDS[m.kind]?.filter]).map(m => ({...m, x: X(m.t)})).sort((a, b) => a.x - b.x);
+      const groups = [];
+      items.forEach(m => { const G = groups[groups.length - 1]; if (G && m.x - G.x1 < 11) { G.items.push(m); G.x1 = m.x; } else groups.push({x0: m.x, x1: m.x, items: [m]}); });
+      groups.forEach(G => {
+        let gx = (G.x0 + G.x1) / 2;
+        if (q.clampLo != null) gx = Math.min(Math.max(gx, q.clampLo), q.clampHi);
+        const top = G.items.reduce((b, m) => KINDS[m.kind].rank > KINDS[b.kind].rank ? m : b, G.items[0]);
+        const g = el('g', {}, gMs);
+        glyph(top.kind, gx, q.y, g);
+        if (G.items.length > 1){ const t = el('text', {x: gx + 6, y: q.y - 5, class: 'cnt'}, g); t.textContent = G.items.length; }
+        const hit = el('circle', {cx: gx, cy: q.y, r: 9, fill: 'transparent', class: 'hit'}, g);
+        bindTip(hit, () => {
+          const counts = {}; G.items.forEach(m => counts[m.kind] = (counts[m.kind] || 0) + 1);
+          const head = Object.entries(counts).sort((a, b) => KINDS[b[0]].rank - KINDS[a[0]].rank).map(([k, n]) => n > 1 ? `${n} ${PLURAL[k]}` : KINDS[k].one).join(' · ');
+          const show = G.items.filter(m => m.kind !== 'testpass').slice(0, 8);
+          return `<b>${esc(head)}</b><div class="m">${esc(q.name)} · ${esc(hm(G.items[0].t))}${G.items.length > 1 ? '–' + esc(hm(G.items[G.items.length - 1].t)) : ''}</div>` +
+            (show.length ? `<ul>${show.map(m => `<li>${esc(m.label)}${m.hash ? ` <span class="m">${esc(m.hash.slice(0, 7))}</span>` : ''}</li>`).join('')}</ul>` : '') +
+            (G.items.length > show.length + G.items.filter(m => m.kind === 'testpass').length ? `<div class="m">and more in the milestone log</div>` : '');
+        }, null, null);
+      });
+    });
+
+    // parallelism strip
+    const step = 5;
+    let peak = 0; const bars = [];
+    W.busy.forEach(b => {
+      for (let t = b[0]; t <= b[1]; t += step / W.K){
+        let n = inSegs(d.main.segs, t) ? 1 : 0;
+        lines.forEach(L => { if (inSegs(L.a.segs, t)) n++; });
+        if (n){ bars.push([X(t), n]); peak = Math.max(peak, n); }
+      }
+    });
+    const unit = peak ? Math.min(9, (STRIP - 6) / peak) : 0;
+    el('line', {x1: x0, y1: stripBase, x2: x1, y2: stripBase, stroke: 'var(--rule)', 'stroke-width': 1}, gAxis);
+    bars.forEach(([bx, n]) => el('rect', {x: bx, y: stripBase - n * unit, width: step + 0.4, height: n * unit, fill: 'var(--accent)', opacity: 0.55}, gAxis));
+    const st = el('text', {x: x0, y: stripBase + 16, class: 'ax'}, gAxis); st.textContent = `Lines working at once · peak ${peak}`;
+
+    current = {X, invX: W.invX, width, natural: W.end};
+    document.getElementById('zlabel').textContent = Math.round(view.zoom * 100) + '%';
+    return {peak};
+  }
+
+  // ---------- tooltips and focus ----------
+  let pinned = false;
+  function bindTip(node, html, lineId, focusId){
+    const show = ev => {
+      tip.innerHTML = typeof html === 'function' ? html() : html; tip.hidden = false;
+      const r = tip.getBoundingClientRect();
+      let x = ev.clientX + 14, y = ev.clientY + 14;
+      if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+      if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+      tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+      dimTo(lineId);
+    };
+    node.addEventListener('pointermove', ev => { if (ev.pointerType !== 'touch') show(ev); });
+    node.addEventListener('pointerleave', ev => { if (ev.pointerType !== 'touch'){ tip.hidden = true; dimTo(null); } });
+    node.addEventListener('click', ev => {
+      if (focusId && view.focus !== focusId){ tip.hidden = true; setFocus(focusId); return; }
+      show(ev);
+    });
+    node.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && focusId){ ev.preventDefault(); setFocus(focusId); } });
+  }
+  function dimTo(id){
+    svg.classList.toggle('dim', !!id && !view.focus);
+    svg.querySelectorAll('.ln').forEach(g => g.classList.toggle('hot', g.dataset.line === id));
+  }
+  document.addEventListener('pointerdown', ev => { if (!ev.target.closest || !ev.target.closest('.hit')){ tip.hidden = true; dimTo(null); } });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && view.focus) setFocus(null); });
+
+  function setFocus(id){
+    view.focus = id; view.zoom = 1;
+    page(); scroller.scrollLeft = 0;
+    if (id) document.getElementById('crumb').scrollIntoView({block: 'nearest'});
+  }
+
+  // ---------- zoom ----------
+  function zoomBy(f, anchorPx){
+    if (!current) return;
+    const rect = scroller.getBoundingClientRect();
+    const ax = anchorPx ?? rect.width / 2;
+    const tAnchor = current.invX(scroller.scrollLeft + ax);
+    view.zoom = Math.min(64, Math.max(0.05, view.zoom * f));
+    render();
+    scroller.scrollLeft = Math.max(0, current.X(tAnchor) - ax);
+  }
+  document.getElementById('zin').onclick = () => zoomBy(1.5);
+  document.getElementById('zout').onclick = () => zoomBy(1/1.5);
+  document.getElementById('zfit').onclick = () => {
+    // Breaks between busy stretches don't scale with zoom, so converge in a few passes.
+    for (let pass = 0; pass < 4; pass++){
+      const f = (scroller.clientWidth - 4) / Math.max(current.width, 1);
+      if (Math.abs(f - 1) < 0.01) break;
+      view.zoom = Math.min(64, Math.max(0.05, view.zoom * f));
+      render();
+    }
+    scroller.scrollLeft = 0;
+  };
+  // drag across the map to zoom into that span
+  function zoomToRange(tA, tB){
+    const pad = 30, avail = scroller.clientWidth - pad * 2;
+    for (let pass = 0; pass < 2; pass++){
+      const w = current.X(tB) - current.X(tA);
+      if (w < 1) break;
+      view.zoom = Math.min(64, Math.max(0.05, view.zoom * avail / w));
+      render();
+    }
+    scroller.scrollLeft = Math.max(0, current.X(tA) - pad);
+  }
+  let drag = null;
+  svg.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0 || ev.pointerType === 'touch' || (ev.target.closest && ev.target.closest('.hit'))) return;
+    const x = ev.clientX - svg.getBoundingClientRect().left;
+    drag = {x0: x, x1: x, id: ev.pointerId,
+      sel: el('rect', {x, y: 0, width: 0, height: svg.getAttribute('height'), fill: 'var(--accent)', 'fill-opacity': 0.12, stroke: 'var(--accent)', 'stroke-width': 1, 'pointer-events': 'none'}, svg)};
+    try { svg.setPointerCapture(ev.pointerId); } catch (e) {}
+    ev.preventDefault();
+  });
+  svg.addEventListener('pointermove', ev => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    drag.x1 = Math.max(0, Math.min(+svg.getAttribute('width'), ev.clientX - svg.getBoundingClientRect().left));
+    drag.sel.setAttribute('x', Math.min(drag.x0, drag.x1));
+    drag.sel.setAttribute('width', Math.abs(drag.x1 - drag.x0));
+  });
+  function endDrag(apply){
+    if (!drag) return;
+    const a = Math.min(drag.x0, drag.x1), b = Math.max(drag.x0, drag.x1);
+    drag.sel.remove(); drag = null;
+    if (apply && b - a > 8) zoomToRange(current.invX(a), current.invX(b));
+  }
+  svg.addEventListener('pointerup', () => endDrag(true));
+  svg.addEventListener('pointercancel', () => endDrag(false));
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && drag) endDrag(false); });
+
+  scroller.addEventListener('wheel', ev => {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    ev.preventDefault();
+    zoomBy(ev.deltaY < 0 ? 1.15 : 1/1.15, ev.clientX - scroller.getBoundingClientRect().left);
+  }, {passive: false});
+
+  // ---------- weight and filters ----------
+  const wt = document.getElementById('wtime'), wc = document.getElementById('wcost');
+  function setWeight(w){ view.weight = w; wt.setAttribute('aria-pressed', String(w === 'time')); wc.setAttribute('aria-pressed', String(w === 'cost')); document.getElementById('weightnote').hidden = w !== 'cost'; const sl = scroller.scrollLeft; render(); scroller.scrollLeft = sl; }
+  wt.onclick = () => setWeight('time'); wc.onclick = () => setWeight('cost');
+  const chips = document.getElementById('chips');
+  FILTERS.forEach(([k, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.id = 'chip-' + k;
+    b.setAttribute('aria-pressed', 'true');
+    b.innerHTML = legendGlyph(k === 'test' ? 'testpass' : k) + (k === 'test' ? legendGlyph('testfail') : '') + label;
+    b.onclick = () => { view.show[k] = !view.show[k]; b.setAttribute('aria-pressed', String(view.show[k])); const sl = scroller.scrollLeft; render(); renderLog(); scroller.scrollLeft = sl; };
+    chips.appendChild(b);
+  });
+
+  // ---------- page ----------
+  function msCounts(list){
+    const c = {commit:0, pr:0, testpass:0, testfail:0, artifact:0};
+    (list || []).forEach(m => c[m.kind] = (c[m.kind] || 0) + 1);
+    return c;
+  }
+  function msCell(list){
+    const c = msCounts(list), parts = [];
+    if (c.commit) parts.push(`${legendGlyph('commit')}${c.commit}`);
+    if (c.pr) parts.push(`${legendGlyph('pr')}${c.pr}`);
+    if (c.testfail) parts.push(`${legendGlyph('testfail')}${c.testfail}`);
+    if (c.testpass) parts.push(`${legendGlyph('testpass')}${c.testpass}`);
+    if (c.artifact) parts.push(`${legendGlyph('artifact')}${c.artifact}`);
+    return parts.length ? `<span class="ms">${parts.map(p => `<span style="display:inline-flex;align-items:center;gap:2px">${p}</span>`).join('')}</span>` : '<span class="ms">—</span>';
+  }
+
+  function renderLog(){
+    const d = SESSIONS[view.key];
+    const rows = [];
+    const push = (list, name, color, side) => (list || []).forEach(m => rows.push({...m, name, color, side}));
+    push(d.main.milestones, 'Main session', 'var(--ink)');
+    d.agents.forEach((a, i) => push(a.milestones, a.desc, col(i)));
+    (d.linked || []).forEach((s, i) => push(s.milestones, s.title, col(d.agents.length + i), true));
+    rows.sort((a, b) => a.t - b.t);
+    const vis = rows.filter(m => view.show[KINDS[m.kind].filter]);
+    const c = msCounts(rows);
+    const bits = [[c.commit,'commits'],[c.pr,'PRs'],[c.testpass + c.testfail, `test runs (${c.testfail} failed)`],[c.artifact,'artifacts']].filter(x => x[0]).map(x => `${x[0]} ${x[1]}`);
+    document.getElementById('logsum').textContent = bits.join(' · ') || 'None found';
+    document.getElementById('logbody').innerHTML = vis.map(m => `<tr><td class="num">${esc(clock(m.t))}</td><td><div class="nm"><span class="sw ${m.side ? 'side' : ''}" style="background:${m.color};color:${m.color}"></span>${esc(m.name)}</div></td><td><span style="display:inline-flex;gap:8px;align-items:center">${legendGlyph(m.kind)}${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a>` : esc(m.label)}${m.hash ? ` <span class="tag">${esc(m.hash.slice(0, 7))}</span>` : ''}</span></td></tr>`).join('');
+  }
+
+  function page(){
+    const d = SESSIONS[view.key];
+    document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.key === view.key)));
+    document.getElementById('eyebrow').textContent = `Session line map · ${d.project}`;
+    document.getElementById('title').textContent = d.title;
+    const tEnd = Math.max(d.t1, ...d.agents.map(a => a.end));
+    document.getElementById('sub').textContent = `${day(d.t0)} ${hm(d.t0)} → ${day(tEnd)} ${hm(tEnd)} · ${d.stations.length} messages from you · ${d.agents.length} subagent${d.agents.length === 1 ? '' : 's'}${d.linked?.length ? ` · ${d.linked.length} linked session${d.linked.length === 1 ? '' : 's'}` : ''}`;
+    document.getElementById('asof').textContent = new Date(META.pricesAsOf + 'T12:00:00').toLocaleDateString([], {month:'long', day:'numeric', year:'numeric'});
+
+    // breadcrumb
+    const ALL = lineList(d);
+    const f = view.focus ? ALL.find(l => l.id === view.focus) : null;
+    const crumb = document.getElementById('crumb');
+    if (f){
+      crumb.innerHTML = `<a id="crumb-all" tabindex="0">All lines</a><span aria-hidden="true">›</span><span class="here"><span class="sw ${f.kind === 'linked' ? 'side' : ''}" style="background:${f.color};color:${f.color}"></span>${esc(f.name)}</span>`;
+      const a = document.getElementById('crumb-all'); a.onclick = () => setFocus(null); a.onkeydown = ev => { if (ev.key === 'Enter') setFocus(null); };
+    } else {
+      crumb.innerHTML = `<span class="tag">All lines</span><span style="color:var(--muted);font-size:13px">Drag across the map to zoom into a stretch · click a branch to focus it · ⌘/Ctrl + scroll to zoom</span>`;
+    }
+
+    const { peak } = render();
+
+    const agentT = d.agents.reduce((s, a) => s + a.active, 0);
+    const agentC = d.agents.reduce((s, a) => s + a.cost, 0);
+    const linked = d.linked || [];
+    const tools = Object.values(d.main.tools).reduce((s, n) => s + n, 0);
+    const ex = d.main.excluded || [];
+    const exT = ex.reduce((s, x) => s + x.active, 0), exC = ex.reduce((s, x) => s + x.cost, 0);
+    document.getElementById('legend-ex').hidden = !ex.length;
+    const tiles = [
+      ['Total working time', dur(d.main.active + agentT), d.agents.length ? 'Main session plus every subagent' : 'Main session only', 'lead'],
+      ['Main session', dur(d.main.active), `${tools} tool calls · ${models(d.main.models)}` + (ex.length ? ` · leaves out ${dur(exT)} making maps` : '')],
+      ['Subagents', d.agents.length ? dur(agentT) : '—', d.agents.length ? `${d.agents.length} lines, peak ${peak} at once` : 'None launched'],
+      ['API-equivalent cost', money(d.main.cost + agentC), `Main ${money(d.main.cost)} · subagents ${money(agentC)}` + (ex.length ? ` · ${money(exC)} on maps left out` : '')],
+      ...(linked.length ? [['Linked sessions', dur(linked.reduce((s, l) => s + l.active, 0)), `${linked.length} session${linked.length > 1 ? 's' : ''} · ${money(linked.reduce((s, l) => s + l.cost, 0))} during this one`]] : []),
+      ['Elapsed', dur(tEnd - d.t0), 'First event to last'],
+      ['Waiting on you', dur(d.main.waitUser), 'Includes time away'],
+    ];
+    document.getElementById('board').innerHTML = tiles.map(([k, v, n, cls]) => `<div class="tile ${cls || ''}"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${esc(n)}</div></div>`).join('');
+
+    const rows = [`<tr><td><div class="nm"><span class="sw" style="background:var(--ink)"></span><b>Main session</b></div></td><td>${esc(models(d.main.models))}</td><td class="num">${dur(d.main.active)}</td><td class="num">${dur(tEnd - d.t0)}</td><td class="num">${ktok(d.main.tokens.output)}</td><td class="num">${money(d.main.cost)}</td><td class="num">${tools}</td><td>${msCell(d.main.milestones)}</td></tr>`];
+    d.agents.forEach((a, i) => {
+      const join = Math.max(a.end, ...(a.joins.length ? a.joins : [a.end]));
+      rows.push(`<tr class="row" tabindex="0" data-line="a${i}"><td><div class="nm"><span class="sw" style="background:${col(i)}"></span>${esc(a.desc)}</div></td><td>${esc(models(a.models))}</td><td class="num">${dur(a.active)}</td><td class="num">${dur(join - a.start)}</td><td class="num">${ktok(a.tokens.output)}</td><td class="num">${money(a.cost)}</td><td class="num">${a.tools}</td><td>${msCell(a.milestones)}</td></tr>`);
+    });
+    linked.forEach((s, i) => {
+      const c = col(d.agents.length + i);
+      rows.push(`<tr class="row" tabindex="0" data-line="s${i}"><td><div class="nm"><span class="sw side" style="color:${c}"></span>${esc(s.title)} <span class="tag">linked session</span></div></td><td>${esc(models(s.models))}</td><td class="num">${dur(s.active)}</td><td class="num">${dur(s.end - s.start)}</td><td class="num">${ktok(s.tokens.output)}</td><td class="num">${money(s.cost)}</td><td class="num">—</td><td>${msCell(s.milestones)}</td></tr>`);
+    });
+    const body = document.getElementById('dirbody');
+    body.innerHTML = rows.join('');
+    body.querySelectorAll('tr[data-line]').forEach(tr => {
+      const id = tr.dataset.line;
+      tr.addEventListener('pointerenter', () => dimTo(id)); tr.addEventListener('pointerleave', () => dimTo(null));
+      tr.addEventListener('click', () => setFocus(id));
+      tr.addEventListener('keydown', ev => { if (ev.key === 'Enter') setFocus(id); });
+    });
+    renderLog();
+  }
+
+  const tabs = document.getElementById('tabs');
+  KEYS.forEach(k => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.key = k; b.id = 'tab-' + k;
+    b.innerHTML = `<span class="dot"></span>${esc(SESSIONS[k].title)}`;
+    b.addEventListener('click', () => { location.hash = k; });
+    tabs.appendChild(b);
+  });
+  function fromHash(){ const k = location.hash.slice(1); view.key = SESSIONS[k] ? k : KEYS[0]; view.focus = null; view.zoom = 1; page(); scroller.scrollLeft = 0; }
+  window.addEventListener('hashchange', fromHash);
+  if (KEYS.length < 2) tabs.hidden = true;
+  fromHash();
+})();
+</script>
