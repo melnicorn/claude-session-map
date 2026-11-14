@@ -2,6 +2,10 @@
 
 A Claude Code skill that draws a session as a subway map.
 
+![A session map of a fictional two-day build, with subagents branching off the main line, a linked session above it, and totals for working time and cost](docs/screenshot.png)
+
+<sub>The fictional demo session from <code>demo/generate_demo.py</code>.</sub>
+
 The main session is the trunk line. Subagents branch off where they were launched and rejoin where they reported back. Other sessions it started or exchanged messages with run alongside, connected at each exchange. Commits, pull requests, test runs and published artifacts sit on the line where they happened. The horizontal axis is scaled to working time, so an overnight pause takes no more room than a coffee break.
 
 Each line also carries its model and its API-equivalent token cost, so you can see where the time went and where the money went.
