@@ -5,7 +5,7 @@ description: Draw a Claude Code session as a subway-style line map — the main 
 
 # Session map
 
-Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. Where an organization doesn't allow Artifacts, it opens locally in the Claude app's browser instead. It can also be saved as a standalone HTML file.
+Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. Where an organization doesn't allow Artifacts, it is written to a local file with a link that opens in the system browser. It can also be saved as a standalone HTML file.
 
 ## What it shows
 
@@ -57,20 +57,19 @@ Every build prints a one-line summary per session to stderr (messages, subagents
 
      Other failures, such as a version conflict or a missing file, aren't a policy block. Fix those and publish again.
 
-3. **Show it locally.** Build into the project with `--here`. That writes to `./.session-map/`, a folder that ignores itself in git and that purge cleans up:
+3. **Link to it locally.** Build without `-o`. The map goes to `~/.claude/session-map/maps/`, which purge cleans up:
 
    ```bash
-   python3 $SM "auth refactor" current --here
+   python3 $SM "auth refactor" current
    ```
 
-   The script prints the file path, then a line starting `url: file://…`. Then:
-   - **Open it in the Claude app's browser** when this session has one: `preview_start` with that `file://` URL (the tool is `mcp__Claude_Browser__preview_start`, or its `remote-devices` equivalent). The map only works there when the file is inside the session's project folder, which is why step 3 uses `--here` and not the default maps folder. Files outside the project open as static snapshots, and the map stays blank.
-   - **Without an in-app browser** (for example in a terminal), add `--open` to the build to open the system browser instead.
-   - **In your reply**, always give two links:
-     - `[Open in your browser](<the file:// URL>)`: a click or Cmd-click opens it in the system browser.
-     - The path relative to the working directory, for example `[.session-map/<file>.html](.session-map/<file>.html)`, which opens it in the app.
+   The script prints the file path, then a line starting `url: file://…`. In your reply, give that URL as a link the user can click or Cmd-click to open in their system browser:
 
-     Say in one line that publishing isn't available for this account, so the map is local. Say it only the first time in a conversation.
+   `[Open in your browser](<the file:// URL>)`
+
+   Say in one line that publishing isn't available for this account, so the map is a local file. Say it only the first time in a conversation.
+
+   Don't try to open the file inside the Claude app: its browser doesn't run local `file:` pages. Don't start a local web server to get around that. If the user asks you to open it for them, run the build with `--open`, which opens the system browser.
 
 **Save it as a file** ("save", "export", "download", "give me the HTML"): write it where the user says. With no place named, use `~/Downloads`, since a folder works as `-o`. Don't publish unless they also asked to see it there. Saved files are kept by a plain purge.
 

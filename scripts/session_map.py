@@ -8,7 +8,7 @@ happened. The horizontal axis is scaled to working time.
 
 Usage:
   session_map.py --list [N]                     recent sessions with titles
-  session_map.py SELECTOR [...] [-o PATH | --here] [--open]
+  session_map.py SELECTOR [...] [-o PATH] [--open]
   session_map.py --publish-status               unknown, ok or blocked (Artifacts disallowed)
   session_map.py --history                      maps written and published so far
   session_map.py --purge [--older-than DAYS] [--include-saved] [--yes]
@@ -630,7 +630,6 @@ STATE = os.path.join(HOME, ".claude", "session-map")
 MAPS_DIR = os.path.join(STATE, "maps")
 HISTORY = os.path.join(STATE, "history.json")
 TEMP_MARKERS = ("/scratch-workspaces/", "/scratchpad/", "/tmp/", "/private/var/folders/", "/.session-map/")
-HERE_DIR = ".session-map"          # self-ignoring folder for maps viewed inside a project
 PUBLISH_RECHECK_DAYS = 7
 
 
@@ -780,16 +779,6 @@ def publish_status():
         print(p.get("state") + (f" since {p.get('at', '')[:10]}" if p.get("at") else "") + (f": {p['reason']}" if p.get("reason") else ""))
 
 
-def here_dir():
-    """A folder inside the current project for maps the app's browser can open live. It ignores itself in git."""
-    d = os.path.join(os.getcwd(), HERE_DIR)
-    os.makedirs(d, exist_ok=True)
-    gi = os.path.join(d, ".gitignore")
-    if not os.path.exists(gi):
-        with open(gi, "w") as f:
-            f.write("# session-map: throwaway maps, never committed\n*\n")
-    return d
-
 
 def open_file(path):
     import webbrowser
@@ -797,7 +786,7 @@ def open_file(path):
     webbrowser.open(Path(path).resolve().as_uri())
 
 
-def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False, here=False):
+def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False):
     data, titles = {}, []
     for sel in selectors:
         p = resolve(sel)
@@ -825,12 +814,9 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
             "params": {"mainIdleCap": MAIN_IDLE_CAP, "agentGap": AGENT_GAP}}
     payload = json.dumps({"meta": meta, "sessions": data}, separators=(",", ":")).replace("</", "<\\/")
     html = open(TEMPLATE).read().replace("/*DATA*/", payload)
-    if here:
-        out_html = here_dir()
-    if not out_html or here:
-        base = out_html if here else MAPS_DIR
-        os.makedirs(base, exist_ok=True)
-        out_html = os.path.join(base, f"{slugify(titles[0])}{'-and-more' if len(titles) > 1 else ''}-{datetime.now():%Y%m%d-%H%M%S}.html")
+    if not out_html:
+        os.makedirs(MAPS_DIR, exist_ok=True)
+        out_html = os.path.join(MAPS_DIR, f"{slugify(titles[0])}{'-and-more' if len(titles) > 1 else ''}-{datetime.now():%Y%m%d-%H%M%S}.html")
     out_html = os.path.abspath(os.path.expanduser(out_html))
     if os.path.isdir(out_html):
         out_html = os.path.join(out_html, f"session-map-{slugify(titles[0])}.html")
@@ -853,7 +839,6 @@ def main():
     ap.add_argument("selectors", nargs="*", help="sessions to map; each becomes a tab")
     ap.add_argument("-o", "--out", help="where to write the page (a file or a folder). Default: ~/.claude/session-map/maps/")
     ap.add_argument("--open", action="store_true", help="open the page in your default browser after writing it")
-    ap.add_argument("--here", action="store_true", help="write into ./.session-map/ (git-ignored) so the Claude app's browser can open it live")
     ap.add_argument("--publish-status", action="store_true", help="print whether publishing Artifacts worked last time: unknown, ok or blocked")
     ap.add_argument("--note-publish", choices=["ok", "blocked"], help="remember whether publishing an Artifact worked")
     ap.add_argument("--reason", default="", help="with --note-publish blocked: the error, briefly")
@@ -893,9 +878,7 @@ def main():
         return forget_artifact(a.forget_artifact)
     if not a.selectors:
         ap.error("give at least one session selector, or --list / --history / --purge")
-    if a.here and a.out:
-        ap.error("--here and -o both choose where the page goes; use one")
-    build(a.selectors, a.out, a.json, a.open, a.include_map_work, a.here)
+    build(a.selectors, a.out, a.json, a.open, a.include_map_work)
 
 
 if __name__ == "__main__":

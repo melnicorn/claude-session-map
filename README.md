@@ -42,7 +42,7 @@ It needs only Python 3, with no packages.
 
 In Claude Code, ask for it: "map this session", "map the auth refactor session and this one", or `/session-map`. Claude finds the sessions, builds the page and publishes it as a private Artifact.
 
-If your organization doesn't allow Artifacts, the first refused publish is remembered for a week. Until then, Claude writes the map into the project's `.session-map/` folder instead. It opens the map in the Claude app's browser, and gives you a link that opens it in your system browser.
+If your organization doesn't allow Artifacts, the first refused publish is remembered for a week. Until then, Claude writes the map to a local file and gives you a link that opens it in your system browser.
 
 Or run the script directly:
 
@@ -62,7 +62,6 @@ The page is one self-contained HTML file with data, styles and code inline, so y
 |---|---|
 | `session_map.py current --open` | Writes the map to `~/.claude/session-map/maps/` and opens it in your browser |
 | `session_map.py current -o ~/Downloads` | Saves it where you choose (a file or a folder) |
-| `session_map.py current --here` | Writes it to `./.session-map/`, a folder that ignores itself in git, so the Claude app's browser can open it |
 | `session_map.py --publish-status` | Whether publishing Artifacts worked last time: `unknown`, `ok` or `blocked` |
 | `session_map.py --history` | Lists maps written and published so far |
 | `session_map.py --purge` | Dry run: shows which old map files would be deleted |
