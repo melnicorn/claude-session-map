@@ -43,6 +43,8 @@ header.top{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justif
 .eyebrow{font-family:var(--font-data);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 h1{font-family:var(--font-display);font-weight:800;font-size:clamp(24px,3.4vw,38px);line-height:1.1;margin:2px 0 4px;text-wrap:balance;letter-spacing:-.01em}
 .sub{color:var(--muted);font-size:14px}
+.back{display:inline-block;font-weight:600;font-size:13.5px;color:var(--accent);text-decoration:none;margin-bottom:6px}
+.back:hover{text-decoration:underline;text-underline-offset:3px}
 .tabs{display:flex;gap:8px;flex-wrap:wrap}
 button{font:600 13px/1 var(--font-body);color:var(--ink);background:var(--panel);border:2px solid var(--ink);border-radius:999px;padding:8px 13px 6px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
 button:focus-visible,.row:focus-visible,.hit:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -127,6 +129,7 @@ details.log .tablewrap{margin-top:12px;max-height:520px;overflow:auto}
     <div class="brand">
       <div class="glyph" aria-hidden="true"></div>
       <div>
+        <a class="back" id="back" href="/" hidden>← All sessions</a>
         <div class="eyebrow" id="eyebrow">Session line map</div>
         <h1 id="title">Session</h1>
         <div class="sub" id="sub"></div>
@@ -765,6 +768,7 @@ details.log .tablewrap{margin-top:12px;max-height:520px;overflow:auto}
     renderLog();
   }
 
+  if (META.backUrl){ const back = document.getElementById('back'); back.href = META.backUrl; back.hidden = false; }
   const tabs = document.getElementById('tabs');
   KEYS.forEach(k => {
     const b = document.createElement('button');

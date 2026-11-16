@@ -44,7 +44,17 @@ In Claude Code, ask for it: "map this session", "map the auth refactor session a
 
 If your organization doesn't allow Artifacts, the first refused publish is remembered for a week. Until then, Claude writes the map to a local file and gives you a one-line `open` command for it. In the Claude desktop app, its Run button opens the map in your system browser.
 
-Or run the script directly:
+### Session browser
+
+To browse every session on your machine, run the local session browser:
+
+```bash
+python3 scripts/session_map.py --serve --open
+```
+
+It lists your sessions with last activity, span, your message count, subagents, models and size. You can search, filter by project and sort. Click a session to build its map on the spot, or tick several to see them as tabs on one map. It listens on `127.0.0.1` only (port 8765, or the next free one), re-reads a transcript only when it has changed, and needs nothing beyond Python 3. In Claude Code, ask for "the session browser".
+
+### From the command line
 
 ```bash
 python3 scripts/session_map.py --list 15
@@ -63,6 +73,7 @@ The page is one self-contained HTML file with data, styles and code inline, so y
 | `session_map.py current --open` | Writes the map to `~/.claude/session-map/maps/` and opens it in your browser |
 | `session_map.py current -o ~/Downloads` | Saves it where you choose (a file or a folder) |
 | `session_map.py --publish-status` | Whether publishing Artifacts worked last time: `unknown`, `ok` or `blocked` |
+| `session_map.py --serve [--port N] [--open]` | Runs the session browser at `http://127.0.0.1:8765/` |
 | `session_map.py --history` | Lists maps written and published so far |
 | `session_map.py --purge` | Dry run: shows which old map files would be deleted |
 | `session_map.py --purge --older-than 7 --yes` | Deletes map files at least a week old |
@@ -121,7 +132,10 @@ MIT. See [LICENSE](LICENSE).
 ## Layout
 
 ```
-SKILL.md              instructions Claude follows
-scripts/session_map.py  transcript parser and page builder
-assets/template.html  the map page (data is injected at /*DATA*/)
+SKILL.md                instructions Claude follows
+scripts/session_map.py  transcript parser, page builder and CLI
+scripts/serve.py        the local session browser (--serve)
+assets/template.html    the map page (data is injected at /*DATA*/)
+assets/browser.html     the session browser page
+demo/generate_demo.py   writes the fictional demo session
 ```

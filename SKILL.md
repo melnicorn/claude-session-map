@@ -1,6 +1,6 @@
 ---
 name: session-map
-description: Draw a Claude Code session as a subway-style line map — the main session as the trunk line, subagents branching off and rejoining, linked sessions alongside, commits/PRs/tests/artifacts as stops, scaled to real working time with token cost per line. Use when the user asks to map, visualize, chart or summarize the work done in a session ("map this session", "show me what the agents did", "where did the time go in yesterday's session", "/session-map"), to save or open such a map as a file, or to clean up old maps ("purge my session maps").
+description: Draw a Claude Code session as a subway-style line map — the main session as the trunk line, subagents branching off and rejoining, linked sessions alongside, commits/PRs/tests/artifacts as stops, scaled to real working time with token cost per line. Use when the user asks to map, visualize, chart or summarize the work done in a session ("map this session", "show me what the agents did", "where did the time go in yesterday's session", "/session-map"), to save or open such a map as a file, to browse all sessions in a local page ("show me all my sessions"), or to clean up old maps ("purge my session maps").
 ---
 
 # Session map
@@ -93,6 +93,18 @@ python3 $SM current --open
 `--open` can be combined with `-o`.
 
 Then reply briefly: the link or file path, the headline numbers (working time, subagents, cost), and anything notable, such as a long pause, a cluster of failed tests or a model switch.
+
+## Browse all sessions
+
+When the user asks to browse, list or pick from their sessions in a page ("show me all my sessions", "open the session browser"), start the local session browser. It lists every session with quick stats (last active, span, messages, subagents, models, size), and opens any session's map when it's clicked. Ticking several opens them as tabs on one map.
+
+Start it in the background, since it runs until stopped, and read the first line it prints for the URL:
+
+```bash
+python3 $SM --serve
+```
+
+It listens on `127.0.0.1` only, tries port 8765 first, and moves up if that's taken. Give the user the `http://127.0.0.1:<port>/` link. If this session has the Claude app's browser, you can also open that URL there with `preview_start`; unlike `file:` pages, a `localhost` page works there. To stop it, stop the background task. This is the one case where the skill runs a server: it's the tool the user asked for, not a workaround for viewing a single file.
 
 ## Clean up old maps
 

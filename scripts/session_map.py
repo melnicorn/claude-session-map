@@ -11,6 +11,7 @@ Usage:
   session_map.py SELECTOR [...] [-o PATH] [--open]
   session_map.py --publish-status               unknown, ok or blocked (Artifacts disallowed)
   session_map.py --history                      maps written and published so far
+  session_map.py --serve [--port N] [--open]     browse every session locally and open their maps
   session_map.py --purge [--older-than DAYS] [--include-saved] [--yes]
 
 SELECTOR is any of: current | a session UUID or prefix | a desktop id
@@ -794,20 +795,25 @@ def open_file(path):
     webbrowser.open(Path(path).resolve().as_uri())
 
 
-def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False):
+class NoSession(Exception):
+    pass
+
+
+def render(selectors, include_map_work=False, quiet=False, extra_meta=None):
+    """Parse the selected sessions and return (html, data, titles). Raises NoSession for a bad selector."""
     data, titles = {}, []
     for sel in selectors:
         p = resolve(sel)
         if not p:
-            print(f"error: no session matches '{sel}'", file=sys.stderr)
-            sys.exit(2)
+            raise NoSession(f"no session matches '{sel}'")
         s = analyze_session(p, include_map_work=include_map_work)
         if not s:
-            print(f"error: '{p}' has no messages", file=sys.stderr)
-            sys.exit(2)
+            raise NoSession(f"'{p}' has no messages")
         s["linked"], s["peers"] = link_sessions(s, include_map_work)
         titles.append(s["title"])
         data[s["id"][:8]] = strip_private(s)
+        if quiet:
+            continue
         a = s["agents"]
         print(f"{s['title']}: {len(s['stations'])} messages, {len(a)} subagents, {len(s['linked'])} linked sessions, "
               f"{sum(len(x['milestones']) for x in a) + len(s['main']['milestones'])} milestones, "
@@ -820,8 +826,17 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
                   f"${sum(x['cost'] for x in ex):,.2f} (use --include-map-work to keep them)", file=sys.stderr)
     meta = {"pricesAsOf": PRICES_AS_OF, "generated": datetime.now().isoformat(timespec="minutes"),
             "params": {"mainIdleCap": MAIN_IDLE_CAP, "agentGap": AGENT_GAP}}
+    meta.update(extra_meta or {})
     payload = json.dumps({"meta": meta, "sessions": data}, separators=(",", ":")).replace("</", "<\\/")
-    html = open(TEMPLATE).read().replace("/*DATA*/", payload)
+    return open(TEMPLATE).read().replace("/*DATA*/", payload), {"meta": meta, "sessions": data}, titles
+
+
+def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False):
+    try:
+        html, full, titles = render(selectors, include_map_work)
+    except NoSession as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
     if not out_html:
         os.makedirs(MAPS_DIR, exist_ok=True)
         out_html = os.path.join(MAPS_DIR, f"{slugify(titles[0])}{'-and-more' if len(titles) > 1 else ''}-{datetime.now():%Y%m%d-%H%M%S}.html")
@@ -834,7 +849,7 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
     record_map(out_html, titles)
     if out_json:
         with open(out_json, "w") as f:
-            json.dump({"meta": meta, "sessions": data}, f, indent=1)
+            json.dump(full, f, indent=1)
     from pathlib import Path
     print(out_html)
     print("url: " + Path(out_html).as_uri())
@@ -857,6 +872,8 @@ def main():
     ap.add_argument("--include-map-work", action="store_true", help="keep turns spent making session maps (left out by default)")
     ap.add_argument("--list", nargs="?", const=20, type=int, metavar="N", help="list the N most recent sessions")
     ap.add_argument("--history", action="store_true", help="list maps written and published so far")
+    ap.add_argument("--serve", action="store_true", help="run the session browser at http://127.0.0.1:PORT")
+    ap.add_argument("--port", type=int, default=8765, help="with --serve: the port to try first (default 8765)")
     ap.add_argument("--purge", action="store_true", help="delete old map files (dry run unless --yes)")
     ap.add_argument("--older-than", type=float, default=0, metavar="DAYS", help="with --purge: only maps at least this old")
     ap.add_argument("--include-saved", action="store_true", help="with --purge: also delete maps saved to a folder you chose")
@@ -875,6 +892,10 @@ def main():
         return list_sessions(a.list)
     if a.history:
         return show_history()
+    if a.serve:
+        sys.path.insert(0, HERE)
+        import serve
+        return serve.run(a.port, a.open)
     if a.purge:
         return purge(a.older_than, a.include_saved, a.yes)
     if a.publish_status:

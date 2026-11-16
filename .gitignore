@@ -4,6 +4,7 @@ published.json
 # Generated maps embed prompt excerpts and commit messages from your sessions
 *.html
 !assets/template.html
+!assets/browser.html
 *.json.out
 work/
 
