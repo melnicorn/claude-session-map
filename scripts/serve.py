@@ -30,6 +30,13 @@ MAP_CMD = b'"content":"<command-message>session-map</command-message>'
 _quick = {}            # path -> (size, mtime, stats)
 _lock = threading.Lock()
 
+# Full stats (working time, cost, milestones) need the real parser, so they're computed in the
+# background and kept on disk. Bump CACHE_VERSION whenever the parser's numbers change.
+CACHE_VERSION = 1
+CACHE_DIR = os.path.join(sm.STATE, "cache")
+_full = {}             # sid -> cache entry {key, stats|error}
+_work = {"queue": [], "busy": None, "event": threading.Event()}
+
 
 def _ts(b):
     try:
@@ -70,6 +77,7 @@ def quick_stats(path, idx_by_cli):
     subs = len(glob.glob(os.path.join(os.path.dirname(path), sid, "subagents", "agent-*.jsonl")))
     stats = {
         "id": sid,
+        "path": path,
         "title": title or f"Untitled ({sid[:8]})",
         "untitled": not title,
         "project": os.path.basename(cwd) if cwd else os.path.basename(os.path.dirname(path)).split("-Repos-")[-1],
@@ -88,6 +96,101 @@ def quick_stats(path, idx_by_cli):
     return stats
 
 
+def cache_key(path):
+    """Changes whenever the transcript, any of its subagents, the parser version or the price table changes."""
+    sid = os.path.basename(path)[:-6]
+    st = os.stat(path)
+    subs = glob.glob(os.path.join(os.path.dirname(path), sid, "subagents", "agent-*.jsonl"))
+    sub_m = max((os.path.getmtime(f) for f in subs), default=0)
+    return [CACHE_VERSION, sm.PRICES_AS_OF, st.st_size, round(st.st_mtime, 3), len(subs), round(sub_m, 3)]
+
+
+def cache_path(sid):
+    return os.path.join(CACHE_DIR, sid + ".json")
+
+
+def cached_full(path):
+    """The cached full stats for a transcript if still valid, else None."""
+    sid = os.path.basename(path)[:-6]
+    try:
+        key = cache_key(path)
+    except OSError:
+        return None
+    with _lock:
+        e = _full.get(sid)
+    if e is None:
+        try:
+            with open(cache_path(sid)) as f:
+                e = json.load(f)
+        except Exception:
+            e = None
+        if e:
+            with _lock:
+                _full[sid] = e
+    return e if e and e.get("key") == key else None
+
+
+def compute_full(path):
+    """Run the real parser and keep the numbers the list needs."""
+    sid = os.path.basename(path)[:-6]
+    key = cache_key(path)
+    try:
+        s = sm.analyze_session(path)
+        if not s:
+            stats = {"work": 0, "main": 0, "agents": 0, "cost": 0, "wait": 0, "output": 0, "models": [], "ms": {}}
+        else:
+            ms = {}
+            for m in s["main"]["milestones"] + [m for a in s["agents"] for m in a["milestones"]]:
+                ms[m["kind"]] = ms.get(m["kind"], 0) + 1
+            models = {}
+            for _, m in s["main"]["models"]:
+                models[m] = models.get(m, 0) + 1
+            for a in s["agents"]:
+                if a.get("model"):
+                    models[a["model"]] = models.get(a["model"], 0) + 1
+            agent_active = sum(a["active"] for a in s["agents"])
+            stats = {
+                "main": round(s["main"]["active"]), "agents": round(agent_active),
+                "work": round(s["main"]["active"] + agent_active),
+                "cost": round(s["main"]["cost"] + sum(a["cost"] for a in s["agents"]), 2),
+                "wait": round(s["main"]["waitUser"]),
+                "output": s["main"]["tokens"]["output"] + sum(a["tokens"]["output"] for a in s["agents"]),
+                "models": sorted(models, key=lambda k: -models[k]),
+                "ms": ms,
+                "excluded": round(sum(x["active"] for x in s["main"].get("excluded", []))),
+            }
+        e = {"key": key, "stats": stats, "at": time.time()}
+    except Exception as ex:                       # keep going; retry only when the file changes
+        e = {"key": key, "error": repr(ex), "at": time.time()}
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = cache_path(sid) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(e, f)
+    os.replace(tmp, cache_path(sid))
+    with _lock:
+        _full[sid] = e
+    return e
+
+
+def worker():
+    """Computes stale sessions, newest first. list_sessions() refills the queue on every request."""
+    while True:
+        _work["event"].wait()
+        while True:
+            with _lock:
+                if not _work["queue"]:
+                    _work["event"].clear()
+                    _work["busy"] = None
+                    break
+                path = _work["queue"].pop(0)
+                _work["busy"] = path
+            try:
+                if cached_full(path) is None:
+                    compute_full(path)
+            except OSError:
+                pass
+
+
 def list_sessions():
     sm._IDX = None                      # pick up sessions created since the last request
     idx = sm.desktop_index()
@@ -99,7 +202,20 @@ def list_sessions():
         except OSError:
             continue
     out.sort(key=lambda s: -(s["last"] or 0))
-    return out
+    stale = []
+    for s in out:
+        path = s["path"]
+        e = cached_full(path)
+        s["full"] = e.get("stats") if e else None
+        s["fullError"] = e.get("error") if e else None
+        if e is None:
+            stale.append(path)
+    with _lock:
+        busy = _work["busy"]
+        _work["queue"] = [p for p in stale if p != busy]
+        if _work["queue"]:
+            _work["event"].set()
+    return [{k: v for k, v in s.items() if k != "path"} for s in out], len(stale)
 
 
 def path_for(sid):
@@ -135,8 +251,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, open(BROWSER, encoding="utf-8").read())
             if u.path == "/api/sessions":
                 t = time.time()
-                rows = list_sessions()
-                return self.send_json(200, {"sessions": rows, "took": round(time.time() - t, 3),
+                rows, pending = list_sessions()
+                return self.send_json(200, {"sessions": rows, "pending": pending, "took": round(time.time() - t, 3),
                                             "projectsDir": sm.PROJECTS, "generated": time.time()})
             if u.path == "/map":
                 ids = [i for i in ",".join(q.get("ids", [])).split(",") if i]
@@ -171,6 +287,8 @@ def run(port=8765, open_browser=False):
             continue
     if not srv:
         raise SystemExit(f"no free port between {port} and {port + 19}")
+    threading.Thread(target=worker, daemon=True, name="session-stats").start()
+    threading.Thread(target=list_sessions, daemon=True).start()      # start filling the cache right away
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
     print(f"Session browser: {url}  (Ctrl-C to stop)", flush=True)
     print(f"Reading transcripts from {sm.PROJECTS}", flush=True)

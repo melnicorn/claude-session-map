@@ -96,7 +96,7 @@ Then reply briefly: the link or file path, the headline numbers (working time, s
 
 ## Browse all sessions
 
-When the user asks to browse, list or pick from their sessions in a page ("show me all my sessions", "open the session browser"), start the local session browser. It lists every session with quick stats (last active, span, messages, subagents, models, size), and opens any session's map when it's clicked. Ticking several opens them as tabs on one map.
+When the user asks to browse, list or pick from their sessions in a page ("show me all my sessions", "open the session browser"), start the local session browser. It lists every session with quick stats (last active, messages, subagents, models, size). Working time, cost and milestones fill in a few seconds later from a cache in `~/.claude/session-map/cache/`, which only recomputes sessions that changed. It opens any session's map when it's clicked. Ticking several opens them as tabs on one map.
 
 Start it in the background, since it runs until stopped, and read the first line it prints for the URL:
 

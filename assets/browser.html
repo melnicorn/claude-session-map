@@ -11,7 +11,7 @@
 /* Layout: the map's transit-board style as a departures board. Header, totals, filter bar, then one table of sessions. */
 :root{
   --paper:#F1F3F0; --panel:#FFFFFF; --ink:#13171B; --muted:#5A626A; --rule:#D2D7D3; --accent:#0B5FA5;
-  --opus:#0A6BC2; --fable:#8A3FA0; --sonnet:#0E8F55; --haiku:#E07B00; --other:#5A626A;
+  --opus:#0A6BC2; --fable:#8A3FA0; --sonnet:#0E8F55; --haiku:#E07B00; --other:#5A626A; --fail:#C62828;
   --font-display:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-body:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-data:"Overpass Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -20,13 +20,13 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --paper:#0D1216; --panel:#151B20; --ink:#E6EAED; --muted:#96A0A9; --rule:#28313A; --accent:#5AA9F0;
-    --opus:#3D95E8; --fable:#B26BCB; --sonnet:#2DB877; --haiku:#F5992E; --other:#96A0A9;
+    --opus:#3D95E8; --fable:#B26BCB; --sonnet:#2DB877; --haiku:#F5992E; --other:#96A0A9; --fail:#FF6B6B;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --paper:#0D1216; --panel:#151B20; --ink:#E6EAED; --muted:#96A0A9; --rule:#28313A; --accent:#5AA9F0;
-  --opus:#3D95E8; --fable:#B26BCB; --sonnet:#2DB877; --haiku:#F5992E; --other:#96A0A9;
+  --opus:#3D95E8; --fable:#B26BCB; --sonnet:#2DB877; --haiku:#F5992E; --other:#96A0A9; --fail:#FF6B6B;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -54,6 +54,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible,tr
 .tile .v{font-family:var(--font-data);font-weight:600;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.2;overflow-wrap:anywhere}
 .tile .n{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .tile.lead .v{color:var(--accent)}
+.tile.word .v{font-size:20px;line-height:1.45;overflow-wrap:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .bar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;background:var(--panel);border:1px solid var(--rule);padding:12px 16px}
 .bar .grow{flex:1 1 220px;min-width:0}
@@ -61,11 +62,6 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible,tr
 .bar select{background:var(--paper);border:1.5px solid var(--rule);border-radius:8px;padding:8px 10px 6px;max-width:100%}
 .bar label{display:inline-flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted);cursor:pointer}
 .bar .k{font-family:var(--font-data);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.seg{display:inline-flex}
-.seg button{border-radius:0;margin-left:-2px;padding:8px 12px 6px}
-.seg button:first-child{border-radius:999px 0 0 999px;margin-left:0}
-.seg button:last-child{border-radius:0 999px 999px 0}
-.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 
 .tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--rule)}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -76,6 +72,13 @@ tbody tr{cursor:pointer}
 tbody tr:hover td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .cb{width:34px;padding-right:0}
+th[data-sort]{padding:0}
+button.th{all:unset;box-sizing:border-box;display:flex;gap:6px;align-items:center;width:100%;padding:10px 12px;cursor:pointer;
+  font-family:var(--font-data);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+th.num button.th{justify-content:flex-end}
+button.th:hover,th[aria-sort] button.th{color:var(--ink)}
+button.th:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.arr{display:inline-block;width:.8em;font-size:10px;text-align:center}
 .cb input{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
 .title{display:flex;flex-direction:column;gap:2px;min-width:260px}
 .title a{color:var(--ink);font-weight:700;text-decoration:none}
@@ -95,6 +98,14 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .chip.opus{color:var(--opus)} .chip.fable,.chip.mythos{color:var(--fable)} .chip.sonnet{color:var(--sonnet)} .chip.haiku{color:var(--haiku)} .chip.other{color:var(--other)}
 .state{padding:40px 16px;text-align:center;color:var(--muted)}
 .foot{color:var(--muted);font-size:12.5px;font-family:var(--font-data)}
+.work .d{display:block;font-size:12px;color:var(--muted)}
+.pend{color:var(--muted);opacity:.6}
+.ms{display:inline-flex;gap:8px;font-family:var(--font-data);font-size:11.5px;color:var(--muted)}
+.ms .bad{color:var(--fail)}
+.progress{display:inline-flex;gap:8px;align-items:center}
+.progress .track{width:90px;height:5px;border-radius:3px;background:var(--rule);overflow:hidden}
+.progress .fill{height:100%;background:var(--accent);transition:width .4s}
+@media (prefers-reduced-motion: reduce){.progress .fill{transition:none}}
 </style>
 </head>
 <body>
@@ -116,13 +127,6 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
   <section class="bar" aria-label="Filters">
     <div class="grow"><input type="search" id="q" placeholder="Search titles and projects" aria-label="Search sessions"></div>
     <select id="project" aria-label="Project"><option value="">All projects</option></select>
-    <span class="k">Sort</span>
-    <span class="seg" id="sort">
-      <button type="button" data-sort="last" aria-pressed="true">Recent</button>
-      <button type="button" data-sort="messages" aria-pressed="false">Messages</button>
-      <button type="button" data-sort="subagents" aria-pressed="false">Subagents</button>
-      <button type="button" data-sort="size" aria-pressed="false">Size</button>
-    </span>
     <label><input type="checkbox" id="withAgents"> With subagents</label>
     <button type="button" class="primary" id="mapSel" disabled>Map selected</button>
   </section>
@@ -130,10 +134,17 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
   <div class="tablewrap">
     <table>
       <thead><tr>
-        <th class="cb"><span hidden>Select</span></th><th>Session</th><th>Last active</th><th class="num">Span</th>
-        <th class="num">Your messages</th><th class="num">Subagents</th><th>Models</th><th class="num">Size</th>
+        <th class="cb"><span hidden>Select</span></th>
+        <th data-sort="title"><button type="button" class="th">Session<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="last"><button type="button" class="th">Last active<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="work" class="num"><button type="button" class="th">Working<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="cost" class="num"><button type="button" class="th">Cost<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="messages" class="num"><button type="button" class="th">Your messages<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="subagents" class="num"><button type="button" class="th">Subagents<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="models"><button type="button" class="th">Models<span class="arr" aria-hidden="true"></span></button></th>
+        <th data-sort="size" class="num"><button type="button" class="th">Size<span class="arr" aria-hidden="true"></span></button></th>
       </tr></thead>
-      <tbody id="rows"><tr><td colspan="8" class="state">Reading transcripts…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="9" class="state">Reading transcripts…</td></tr></tbody>
     </table>
   </div>
   <div class="foot" id="foot"></div>
@@ -145,7 +156,10 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const store = { get(k){ try { return localStorage.getItem('sm-browser-' + k); } catch (e) { return null; } },
                   set(k, v){ try { localStorage.setItem('sm-browser-' + k, v); } catch (e) {} } };
-  let all = [], selected = new Set(), sort = store.get('sort') || 'last';
+  // Text columns start A-Z; number and date columns start largest/newest first. Clicking again reverses.
+  const TEXT = new Set(['title', 'models']);
+  const saved = (store.get('sort2') || 'last:desc').split(':');
+  let all = [], selected = new Set(), sort = {key: saved[0], dir: saved[1] === 'asc' ? 'asc' : 'desc'};
 
   const ago = t => {
     const s = Date.now() / 1000 - t;
@@ -161,12 +175,25 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
   const family = m => (/claude-([a-z]+)/.exec(m) || [, 'other'])[1];
   const modelName = m => { const r = /claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?/.exec(m || ''); return r ? r[1][0].toUpperCase() + r[1].slice(1) + ' ' + r[2] + (r[3] ? '.' + r[3] : '') : m; };
   const mapUrl = ids => '/map?ids=' + ids.join(',');
+  const dur = s => { s = Math.round(s || 0); if (s < 60) return s + 's'; const m = Math.round(s / 60); if (m < 60) return m + 'm'; const h = Math.floor(m / 60), r = m % 60; return h + 'h' + (r ? ' ' + String(r).padStart(2, '0') + 'm' : ''); };
+  const money = c => c >= 100 ? '$' + Math.round(c).toLocaleString() : '$' + (c || 0).toFixed(2);
+  let pending = 0, timer = null;
 
   function filtered(){
     const q = $('q').value.trim().toLowerCase(), proj = $('project').value, agentsOnly = $('withAgents').checked;
     let rows = all.filter(s => (!q || (s.title + ' ' + s.project).toLowerCase().includes(q)) && (!proj || s.project === proj) && (!agentsOnly || s.subagents > 0));
-    const key = {last: s => s.last || 0, messages: s => s.messages, subagents: s => s.subagents, size: s => s.size}[sort];
-    return rows.sort((a, b) => key(b) - key(a));
+    const val = {
+      title: s => s.title.toLowerCase(), last: s => s.last || 0, messages: s => s.messages, subagents: s => s.subagents, size: s => s.size,
+      work: s => s.full ? s.full.work : null, cost: s => s.full ? s.full.cost : null,
+      models: s => ((s.full && s.full.models.length ? s.full.models : s.models)[0] || null),
+    }[sort.key] || (s => s.last || 0);
+    const sign = sort.dir === 'asc' ? 1 : -1;
+    return rows.sort((a, b) => {
+      const x = val(a), y = val(b);
+      if (x === null || y === null) return (x === null) - (y === null);    // missing values always last
+      const c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+      return c ? sign * c : (b.last || 0) - (a.last || 0);
+    });
   }
 
   function board(){
@@ -179,14 +206,32 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
     week.forEach(s => byProj[s.project] = (byProj[s.project] || 0) + s.messages);
     const busiest = Object.entries(byProj).sort((a, b) => b[1] - a[1])[0];
     const mostAgents = all.reduce((b, s) => s.subagents > (b?.subagents || 0) ? s : b, null);
+    const done = all.filter(s => s.full), so = pending ? ' so far' : '';
+    const sum = (list, f) => list.reduce((n, s) => n + (s.full ? f(s.full) : 0), 0);
     const tiles = [
-      ['Sessions', all.length, `${projects.size} projects`, 'lead'],
-      ['This week', week.length, `${week.reduce((n, s) => n + s.messages, 0)} messages from you`],
-      ['Your messages', msgs.toLocaleString(), 'Across every session'],
+      ['Sessions', all.length, `${projects.size} projects · ${msgs.toLocaleString()} messages from you`, 'lead'],
+      ['This week', dur(sum(week, f => f.work)), `${week.length} sessions · ${money(sum(week, f => f.cost))}${so}`],
+      ['Working time', dur(sum(all, f => f.work)), `Main sessions plus subagents${so}`],
+      ['API-equivalent cost', money(sum(all, f => f.cost)), `At list prices${so}`],
       ['Subagents', agents.toLocaleString(), mostAgents ? `Most: ${mostAgents.subagents} in “${mostAgents.title}”` : 'None yet'],
-      ['Busiest this week', busiest ? busiest[0] : '—', busiest ? `${busiest[1]} messages` : 'No activity'],
+      ['Busiest this week', busiest ? busiest[0] : '—', busiest ? `${busiest[1]} messages` : 'No activity', 'word'],
     ];
-    $('board').innerHTML = tiles.map(([k, v, n, cls]) => `<div class="tile ${cls || ''}"><div class="k">${k}</div><div class="v">${esc(v)}</div><div class="n">${esc(n)}</div></div>`).join('');
+    $('board').innerHTML = tiles.map(([k, v, n, cls]) => `<div class="tile ${cls || ''}"><div class="k">${k}</div><div class="v" title="${esc(v)}">${esc(v)}</div><div class="n">${esc(n)}</div></div>`).join('');
+  }
+
+  function workCell(s){
+    if (!s.full) return `<td class="num work pend" title="${s.fullError ? esc('Couldn\'t parse: ' + s.fullError) : 'Computing…'}">${s.fullError ? '—' : '…'}<span class="d">over ${span(s.first, s.last)}</span></td><td class="num pend">${s.fullError ? '—' : '…'}</td>`;
+    const f = s.full;
+    return `<td class="num work" title="Main session ${dur(f.main)} · subagents ${dur(f.agents)} · waiting on you ${dur(f.wait)}">${dur(f.work)}<span class="d">over ${span(s.first, s.last)}</span></td><td class="num">${money(f.cost)}</td>`;
+  }
+  function msLine(s){
+    const m = s.full && s.full.ms; if (!m) return '';
+    const bits = [];
+    if (m.commit) bits.push(`${m.commit} commit${m.commit > 1 ? 's' : ''}`);
+    if (m.pr) bits.push(`${m.pr} PR${m.pr > 1 ? 's' : ''}`);
+    if (m.testfail) bits.push(`<span class="bad">${m.testfail} failed test${m.testfail > 1 ? 's' : ''}</span>`);
+    if (m.artifact) bits.push(`${m.artifact} artifact${m.artifact > 1 ? 's' : ''}`);
+    return bits.length ? `<span class="ms">${bits.join(' · ')}</span>` : '';
   }
 
   function render(){
@@ -197,14 +242,14 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
       <tr data-id="${s.id}" class="${selected.has(s.id) ? 'sel' : ''}" tabindex="0">
         <td class="cb"><input type="checkbox" aria-label="Select ${esc(s.title)}" ${selected.has(s.id) ? 'checked' : ''}></td>
         <td><div class="title ${s.untitled ? 'untitled' : ''}"><a href="${mapUrl([s.id])}">${esc(s.title)}</a>
-          <div class="meta"><span class="tag">${esc(s.project)}</span><span>${s.id.slice(0, 8)}</span>${now - s.modified < 180 ? '<span class="live">active now</span>' : ''}${s.mapRuns ? `<span>${s.mapRuns} map run${s.mapRuns > 1 ? 's' : ''}</span>` : ''}</div></div></td>
+          <div class="meta"><span class="tag">${esc(s.project)}</span><span>${s.id.slice(0, 8)}</span>${now - s.modified < 180 ? '<span class="live">active now</span>' : ''}${msLine(s)}${s.mapRuns ? `<span>${s.mapRuns} map run${s.mapRuns > 1 ? 's' : ''}</span>` : ''}</div></div></td>
         <td class="when" title="${esc(when(s.last))}">${esc(ago(s.last))}<span class="d">${esc(when(s.last))}</span></td>
-        <td class="num">${span(s.first, s.last)}</td>
+        ${workCell(s)}
         <td class="num">${s.messages || '—'}</td>
         <td class="num"><div class="agents">${s.subagents || '—'}${s.subagents ? `<span class="track"><span class="fill" style="width:${Math.max(6, 100 * Math.sqrt(s.subagents / maxAgents))}%"></span></span>` : ''}</div></td>
-        <td><div class="models">${s.models.slice(0, 3).map(m => `<span class="chip ${family(m)}">${esc(modelName(m))}</span>`).join('')}</div></td>
+        <td><div class="models">${(s.full && s.full.models.length ? s.full.models : s.models).slice(0, 3).map(m => `<span class="chip ${family(m)}">${esc(modelName(m))}</span>`).join('')}</div></td>
         <td class="num">${size(s.size)}</td>
-      </tr>`).join('') : `<tr><td colspan="8" class="state">No sessions match.</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="9" class="state">No sessions match.</td></tr>`;
     $('foot').textContent = `Showing ${rows.length} of ${all.length} · click a session to open its map · select several to see them as tabs on one map`;
     $('mapSel').disabled = !selected.size;
     $('mapSel').textContent = selected.size ? `Map selected (${selected.size})` : 'Map selected';
@@ -227,10 +272,20 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
   $('rows').addEventListener('keydown', ev => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter' && ev.target === tr) location.href = mapUrl([tr.dataset.id]); });
   $('mapSel').onclick = () => { if (selected.size) location.href = mapUrl([...selected]); };
   ['q', 'project', 'withAgents'].forEach(id => $(id).addEventListener('input', render));
-  document.querySelectorAll('#sort button').forEach(b => {
-    b.setAttribute('aria-pressed', String(b.dataset.sort === sort));
-    b.onclick = () => { sort = b.dataset.sort; store.set('sort', sort); document.querySelectorAll('#sort button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); render(); };
-  });
+  function headers(){
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+      const on = th.dataset.sort === sort.key;
+      if (on) th.setAttribute('aria-sort', sort.dir === 'asc' ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
+      th.querySelector('.arr').textContent = on ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+    });
+  }
+  document.querySelectorAll('th[data-sort] button').forEach(b => b.addEventListener('click', () => {
+    const key = b.closest('th').dataset.sort;
+    sort = key === sort.key ? {key, dir: sort.dir === 'asc' ? 'desc' : 'asc'} : {key, dir: TEXT.has(key) ? 'asc' : 'desc'};
+    store.set('sort2', sort.key + ':' + sort.dir);
+    headers(); render();
+  }));
+  headers();
 
   async function load(){
     $('refresh').disabled = true;
@@ -242,10 +297,16 @@ tbody tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
       const keep = $('project').value;
       const projects = [...new Set(all.map(s => s.project))].sort((a, b) => a.localeCompare(b));
       $('project').innerHTML = '<option value="">All projects</option>' + projects.map(p => `<option ${p === keep ? 'selected' : ''}>${esc(p)}</option>`).join('');
-      $('sub').innerHTML = `${all.length} sessions · read in ${d.took}s from <code>${esc(d.projectsDir.replace(/^\/Users\/[^/]+/, '~'))}</code>`;
+      pending = d.pending;
+      const where = `<code>${esc(d.projectsDir.replace(/^\/Users\/[^/]+/, '~'))}</code>`;
+      $('sub').innerHTML = pending
+        ? `<span class="progress">Working out time and cost: ${all.length - pending} of ${all.length}<span class="track"><span class="fill" style="width:${100 * (all.length - pending) / Math.max(all.length, 1)}%"></span></span></span>`
+        : `${all.length} sessions from ${where}`;
       board(); render();
+      clearTimeout(timer);
+      if (pending) timer = setTimeout(load, 1500);
     } catch (e) {
-      $('rows').innerHTML = `<tr><td colspan="8" class="state">Couldn't read sessions: ${esc(e.message)}. Is the server still running?</td></tr>`;
+      $('rows').innerHTML = `<tr><td colspan="9" class="state">Couldn't read sessions: ${esc(e.message)}. Is the server still running?</td></tr>`;
     } finally { $('refresh').disabled = false; }
   }
   $('refresh').onclick = load;

@@ -18,7 +18,7 @@ SELECTOR is any of: current | a session UUID or prefix | a desktop id
 (local_...) | a path to a .jsonl transcript | part of a session title.
 Each selector becomes a tab in the page.
 """
-import argparse, glob, json, os, re, sys
+import argparse, glob, json, os, re, shutil, sys
 from datetime import datetime
 
 HOME = os.path.expanduser("~")
@@ -874,6 +874,7 @@ def main():
     ap.add_argument("--history", action="store_true", help="list maps written and published so far")
     ap.add_argument("--serve", action="store_true", help="run the session browser at http://127.0.0.1:PORT")
     ap.add_argument("--port", type=int, default=8765, help="with --serve: the port to try first (default 8765)")
+    ap.add_argument("--clear-cache", action="store_true", help="forget the session browser's cached stats so they're recomputed")
     ap.add_argument("--purge", action="store_true", help="delete old map files (dry run unless --yes)")
     ap.add_argument("--older-than", type=float, default=0, metavar="DAYS", help="with --purge: only maps at least this old")
     ap.add_argument("--include-saved", action="store_true", help="with --purge: also delete maps saved to a folder you chose")
@@ -892,6 +893,11 @@ def main():
         return list_sessions(a.list)
     if a.history:
         return show_history()
+    if a.clear_cache:
+        d = os.path.join(STATE, "cache")
+        n = len(glob.glob(os.path.join(d, "*.json")))
+        shutil.rmtree(d, ignore_errors=True)
+        return print(f"cleared {n} cached session stats")
     if a.serve:
         sys.path.insert(0, HERE)
         import serve

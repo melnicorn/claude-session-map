@@ -52,7 +52,9 @@ To browse every session on your machine, run the local session browser:
 python3 scripts/session_map.py --serve --open
 ```
 
-It lists your sessions with last activity, span, your message count, subagents, models and size. You can search, filter by project and sort. Click a session to build its map on the spot, or tick several to see them as tabs on one map. It listens on `127.0.0.1` only (port 8765, or the next free one), re-reads a transcript only when it has changed, and needs nothing beyond Python 3. In Claude Code, ask for "the session browser".
+It lists your sessions with last activity, your message count, subagents, models and size straight away. Working time, API-equivalent cost and milestones (commits, PRs, failed tests, artifacts) fill in a few seconds later, with totals for the week and overall. You can search, filter by project, and click any column header to sort by it (again to reverse). Click a session to build its map on the spot, or tick several to see them as tabs on one map.
+
+Full stats are cached in `~/.claude/session-map/cache/`, one file per session. A session is recomputed only when its transcript or one of its subagents changes, or when the parser or price table changes. `--clear-cache` makes it start over. The server listens on `127.0.0.1` only (port 8765, or the next free one) and needs nothing beyond Python 3. In Claude Code, ask for "the session browser".
 
 ### From the command line
 
@@ -74,6 +76,7 @@ The page is one self-contained HTML file with data, styles and code inline, so y
 | `session_map.py current -o ~/Downloads` | Saves it where you choose (a file or a folder) |
 | `session_map.py --publish-status` | Whether publishing Artifacts worked last time: `unknown`, `ok` or `blocked` |
 | `session_map.py --serve [--port N] [--open]` | Runs the session browser at `http://127.0.0.1:8765/` |
+| `session_map.py --clear-cache` | Forgets the session browser's cached stats so they're recomputed |
 | `session_map.py --history` | Lists maps written and published so far |
 | `session_map.py --purge` | Dry run: shows which old map files would be deleted |
 | `session_map.py --purge --older-than 7 --yes` | Deletes map files at least a week old |
