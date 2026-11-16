@@ -218,8 +218,18 @@ def list_sessions():
     return [{k: v for k, v in s.items() if k != "path"} for s in out], len(stale)
 
 
+class Ambiguous(Exception):
+    pass
+
+
 def path_for(sid):
+    """A full session id, or a unique prefix of one (as the CLI selectors accept)."""
     hits = glob.glob(os.path.join(sm.PROJECTS, "*", sid + ".jsonl"))
+    if hits:
+        return hits[0]
+    hits = glob.glob(os.path.join(sm.PROJECTS, "*", sid + "*.jsonl"))
+    if len(hits) > 1:
+        raise Ambiguous(f"Session id prefix {sid} matches {len(hits)} sessions; use more of the id")
     return hits[0] if hits else None
 
 
@@ -237,13 +247,29 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
         self.end_headers()
         self.wfile.write(body)
 
     def send_json(self, code, obj):
         self.send(code, json.dumps(obj), "application/json; charset=utf-8")
 
+    def host_ok(self):
+        """Only answer requests addressed to this server by its loopback name.
+
+        Binding to 127.0.0.1 keeps other machines out, but a web page can still reach the server through
+        DNS rebinding: its own hostname is re-pointed at 127.0.0.1, so the browser treats our responses as
+        same-origin. Those requests always carry the attacker's hostname in Host, so refuse anything else.
+        """
+        host = (self.headers.get("Host") or "").strip().lower()
+        port = self.server.server_address[1]
+        return host in (f"127.0.0.1:{port}", f"localhost:{port}")
+
     def do_GET(self):
+        if not self.host_ok():
+            return self.send(403, "Forbidden: open the session browser at http://127.0.0.1:%d/" % self.server.server_address[1],
+                             "text/plain; charset=utf-8")
         u = urlparse(self.path)
         q = parse_qs(u.query)
         try:
@@ -272,6 +298,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, "Not found")
         except sm.NoSession as e:
             return self.send(404, str(e))
+        except Ambiguous as e:
+            return self.send(400, str(e), "text/plain; charset=utf-8")
         except Exception as e:                  # surface parser bugs in the page instead of a dropped connection
             self.log_error("error on %s: %r", self.path, e)
             return self.send(500, f"session-map hit an error: {e!r}")

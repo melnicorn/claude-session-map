@@ -54,7 +54,7 @@ python3 scripts/session_map.py --serve --open
 
 It lists your sessions with last activity, your message count, subagents, models and size straight away. Working time, API-equivalent cost and milestones (commits, PRs, failed tests, artifacts) fill in a few seconds later, with totals for the week and overall. You can search, filter by project, and click any column header to sort by it (again to reverse). Click a session to build its map on the spot, or tick several to see them as tabs on one map.
 
-Full stats are cached in `~/.claude/session-map/cache/`, one file per session. A session is recomputed only when its transcript or one of its subagents changes, or when the parser or price table changes. `--clear-cache` makes it start over. The server listens on `127.0.0.1` only (port 8765, or the next free one) and needs nothing beyond Python 3. In Claude Code, ask for "the session browser".
+Full stats are cached in `~/.claude/session-map/cache/`, one file per session. A session is recomputed only when its transcript or one of its subagents changes, or when the parser or price table changes. `--clear-cache` makes it start over. The server listens on `127.0.0.1` only (port 8765, or the next free one) and needs nothing beyond Python 3. It also refuses any request not addressed to `127.0.0.1` or `localhost` on its own port, so a web page can't reach it through DNS rebinding. Open it at `http://127.0.0.1:<port>/` or `http://localhost:<port>/`. In Claude Code, ask for "the session browser".
 
 ### From the command line
 
