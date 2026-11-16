@@ -5,7 +5,7 @@ description: Draw a Claude Code session as a subway-style line map — the main 
 
 # Session map
 
-Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. Where an organization doesn't allow Artifacts, it is written to a local file with a link that opens in the system browser. It can also be saved as a standalone HTML file.
+Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. Where an organization doesn't allow Artifacts, it is written to a local file, with a one-line command that opens it in the system browser. It can also be saved as a standalone HTML file.
 
 ## What it shows
 
@@ -22,7 +22,7 @@ The script is `~/.claude/skills/session-map/scripts/session_map.py` (`$SM` below
 
 Selectors: `current` (the newest transcript for the working directory, normally this session), a session UUID or prefix, a desktop id (`local_…`), a transcript path, or part of a session title. Each selector becomes a tab. If the user is vague, run `python3 $SM --list 15` and pick, or ask.
 
-Every build prints a one-line summary per session to stderr (messages, subagents, linked sessions, milestones, cost). To stdout it prints the output path, then `url: file://…`. Use the summary in your reply.
+Every build prints a one-line summary per session to stderr (messages, subagents, linked sessions, milestones, cost). To stdout it prints the output path, then `url: file://…`, then `open: <command>`. Use the summary in your reply.
 
 **Map-making is left out by default.** A turn that runs this skill, through `/session-map`, the Skill tool or the skill's instructions loading, doesn't count. From that point to the end of the turn, its time, cost, tool calls, milestones and the user's `/session-map` message are removed. On the map it shows as a dashed outline on the main line. The summary adds a "left out N map-making turn(s)" line. Add `--include-map-work` only when the user wants that work counted ("include the map runs", "count everything"). Running the script by hand doesn't trigger this, so a session spent developing this skill still counts as real work.
 
@@ -63,13 +63,20 @@ Every build prints a one-line summary per session to stderr (messages, subagents
    python3 $SM "auth refactor" current
    ```
 
-   The script prints the file path, then a line starting `url: file://…`. In your reply, give that URL as a link the user can click or Cmd-click to open in their system browser:
+   The script prints the file path, then a line starting `url: file://…`, then a line starting `open: `. That last line is a command, already quoted for this platform, that opens the map in the default browser.
 
-   `[Open in your browser](<the file:// URL>)`
+   In your reply, give the `open:` command, without the `open: ` label, as a single-line `bash` block. In the Claude desktop app this shows a Run button that opens the map in the system browser:
+
+   ```bash
+   open '/Users/you/.claude/session-map/maps/<map>.html'
+   ```
+
+   - **Keep it on one line.** The Run button only appears on single-line shell blocks.
+   - **Don't make the `file://` URL the main way to open it.** The Claude app handles every `file:` link itself, even with Cmd held, and refuses files outside the session's folders. Add the URL on its own line after the block, for viewers outside the app such as a terminal.
 
    Say in one line that publishing isn't available for this account, so the map is a local file. Say it only the first time in a conversation.
 
-   Don't try to open the file inside the Claude app: its browser doesn't run local `file:` pages. Don't start a local web server to get around that. If the user asks you to open it for them, run the build with `--open`, which opens the system browser.
+   Don't try to open the file inside the Claude app's browser: it doesn't run local `file:` pages. Don't start a local web server to get around that. If the user asks you to open it for them, run the build with `--open`, which opens the system browser.
 
 **Save it as a file** ("save", "export", "download", "give me the HTML"): write it where the user says. With no place named, use `~/Downloads`, since a folder works as `-o`. Don't publish unless they also asked to see it there. Saved files are kept by a plain purge.
 

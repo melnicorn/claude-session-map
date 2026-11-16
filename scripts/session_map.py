@@ -780,6 +780,14 @@ def publish_status():
 
 
 
+def open_command(path):
+    """A one-line shell command that opens `path` in the default browser, quoted for this platform."""
+    if sys.platform == "win32":
+        return 'start "" "' + path.replace('"', '') + '"'
+    import shlex
+    return ("open " if sys.platform == "darwin" else "xdg-open ") + shlex.quote(path)
+
+
 def open_file(path):
     import webbrowser
     from pathlib import Path
@@ -830,6 +838,7 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
     from pathlib import Path
     print(out_html)
     print("url: " + Path(out_html).as_uri())
+    print("open: " + open_command(out_html))
     if open_after:
         open_file(out_html)
 
