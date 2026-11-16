@@ -8,7 +8,8 @@ happened. The horizontal axis is scaled to working time.
 
 Usage:
   session_map.py --list [N]                     recent sessions with titles
-  session_map.py SELECTOR [...] [-o PATH] [--open]
+  session_map.py SELECTOR [...] [-o PATH | --here] [--open]
+  session_map.py --publish-status               unknown, ok or blocked (Artifacts disallowed)
   session_map.py --history                      maps written and published so far
   session_map.py --purge [--older-than DAYS] [--include-saved] [--yes]
 
@@ -628,7 +629,9 @@ def strip_private(s):
 STATE = os.path.join(HOME, ".claude", "session-map")
 MAPS_DIR = os.path.join(STATE, "maps")
 HISTORY = os.path.join(STATE, "history.json")
-TEMP_MARKERS = ("/scratch-workspaces/", "/scratchpad/", "/tmp/", "/private/var/folders/")
+TEMP_MARKERS = ("/scratch-workspaces/", "/scratchpad/", "/tmp/", "/private/var/folders/", "/.session-map/")
+HERE_DIR = ".session-map"          # self-ignoring folder for maps viewed inside a project
+PUBLISH_RECHECK_DAYS = 7
 
 
 def load_history():
@@ -638,6 +641,7 @@ def load_history():
         h = {}
     h.setdefault("maps", [])
     h.setdefault("artifacts", [])
+    h.setdefault("publish", {})
     return h
 
 
@@ -674,6 +678,7 @@ def record_artifact(url, sessions, path=None):
     h["artifacts"] = [a for a in h["artifacts"] if a["url"] != url]
     h["artifacts"].append({"url": url, "sessions": sessions or "", "path": os.path.abspath(path) if path else None,
                            "published": datetime.now().isoformat(timespec="seconds")})
+    h["publish"] = {"state": "ok", "at": datetime.now().isoformat(timespec="seconds"), "reason": ""}
     save_history(h)
     print(f"recorded {url}")
 
@@ -757,13 +762,42 @@ def purge(older_than, include_saved, yes):
     save_history(h)
 
 
+def note_publish(state, reason=""):
+    h = load_history()
+    h["publish"] = {"state": state, "at": datetime.now().isoformat(timespec="seconds"), "reason": reason}
+    save_history(h)
+    print(f"publishing marked {state}")
+
+
+def publish_status():
+    """Prints 'unknown', 'ok' or 'blocked'. A blocked note expires after PUBLISH_RECHECK_DAYS so policy changes are noticed."""
+    p = load_history()["publish"]
+    if not p:
+        print("unknown")
+    elif p.get("state") == "blocked" and age_days(p.get("at", "")) >= PUBLISH_RECHECK_DAYS:
+        print(f"unknown (blocked on {p.get('at', '')[:10]}, worth trying again)")
+    else:
+        print(p.get("state") + (f" since {p.get('at', '')[:10]}" if p.get("at") else "") + (f": {p['reason']}" if p.get("reason") else ""))
+
+
+def here_dir():
+    """A folder inside the current project for maps the app's browser can open live. It ignores itself in git."""
+    d = os.path.join(os.getcwd(), HERE_DIR)
+    os.makedirs(d, exist_ok=True)
+    gi = os.path.join(d, ".gitignore")
+    if not os.path.exists(gi):
+        with open(gi, "w") as f:
+            f.write("# session-map: throwaway maps, never committed\n*\n")
+    return d
+
+
 def open_file(path):
     import webbrowser
     from pathlib import Path
     webbrowser.open(Path(path).resolve().as_uri())
 
 
-def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False):
+def build(selectors, out_html=None, out_json=None, open_after=False, include_map_work=False, here=False):
     data, titles = {}, []
     for sel in selectors:
         p = resolve(sel)
@@ -791,9 +825,12 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
             "params": {"mainIdleCap": MAIN_IDLE_CAP, "agentGap": AGENT_GAP}}
     payload = json.dumps({"meta": meta, "sessions": data}, separators=(",", ":")).replace("</", "<\\/")
     html = open(TEMPLATE).read().replace("/*DATA*/", payload)
-    if not out_html:
-        os.makedirs(MAPS_DIR, exist_ok=True)
-        out_html = os.path.join(MAPS_DIR, f"{slugify(titles[0])}{'-and-more' if len(titles) > 1 else ''}-{datetime.now():%Y%m%d-%H%M%S}.html")
+    if here:
+        out_html = here_dir()
+    if not out_html or here:
+        base = out_html if here else MAPS_DIR
+        os.makedirs(base, exist_ok=True)
+        out_html = os.path.join(base, f"{slugify(titles[0])}{'-and-more' if len(titles) > 1 else ''}-{datetime.now():%Y%m%d-%H%M%S}.html")
     out_html = os.path.abspath(os.path.expanduser(out_html))
     if os.path.isdir(out_html):
         out_html = os.path.join(out_html, f"session-map-{slugify(titles[0])}.html")
@@ -804,7 +841,9 @@ def build(selectors, out_html=None, out_json=None, open_after=False, include_map
     if out_json:
         with open(out_json, "w") as f:
             json.dump({"meta": meta, "sessions": data}, f, indent=1)
+    from pathlib import Path
     print(out_html)
+    print("url: " + Path(out_html).as_uri())
     if open_after:
         open_file(out_html)
 
@@ -814,6 +853,10 @@ def main():
     ap.add_argument("selectors", nargs="*", help="sessions to map; each becomes a tab")
     ap.add_argument("-o", "--out", help="where to write the page (a file or a folder). Default: ~/.claude/session-map/maps/")
     ap.add_argument("--open", action="store_true", help="open the page in your default browser after writing it")
+    ap.add_argument("--here", action="store_true", help="write into ./.session-map/ (git-ignored) so the Claude app's browser can open it live")
+    ap.add_argument("--publish-status", action="store_true", help="print whether publishing Artifacts worked last time: unknown, ok or blocked")
+    ap.add_argument("--note-publish", choices=["ok", "blocked"], help="remember whether publishing an Artifact worked")
+    ap.add_argument("--reason", default="", help="with --note-publish blocked: the error, briefly")
     ap.add_argument("--json", help="also write the parsed data to this file")
     ap.add_argument("--projects-dir", help="read transcripts from here instead of ~/.claude/projects (e.g. demo/data/projects)")
     ap.add_argument("--desktop-dir", help="read desktop session records from here instead of the Claude app's folder")
@@ -840,13 +883,19 @@ def main():
         return show_history()
     if a.purge:
         return purge(a.older_than, a.include_saved, a.yes)
+    if a.publish_status:
+        return publish_status()
+    if a.note_publish:
+        return note_publish(a.note_publish, a.reason)
     if a.record_artifact:
         return record_artifact(a.record_artifact, a.sessions, a.file)
     if a.forget_artifact:
         return forget_artifact(a.forget_artifact)
     if not a.selectors:
         ap.error("give at least one session selector, or --list / --history / --purge")
-    build(a.selectors, a.out, a.json, a.open, a.include_map_work)
+    if a.here and a.out:
+        ap.error("--here and -o both choose where the page goes; use one")
+    build(a.selectors, a.out, a.json, a.open, a.include_map_work, a.here)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ description: Draw a Claude Code session as a subway-style line map — the main 
 
 # Session map
 
-Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. It can also be saved as a standalone HTML file or opened locally.
+Renders one or more Claude Code sessions as an interactive HTML line map. By default it is published as a private Artifact. Where an organization doesn't allow Artifacts, it opens locally in the Claude app's browser instead. It can also be saved as a standalone HTML file.
 
 ## What it shows
 
@@ -22,23 +22,55 @@ The script is `~/.claude/skills/session-map/scripts/session_map.py` (`$SM` below
 
 Selectors: `current` (the newest transcript for the working directory, normally this session), a session UUID or prefix, a desktop id (`local_…`), a transcript path, or part of a session title. Each selector becomes a tab. If the user is vague, run `python3 $SM --list 15` and pick, or ask.
 
-Every build prints a one-line summary per session to stderr (messages, subagents, linked sessions, milestones, cost) and the output path to stdout. Use the summary in your reply.
+Every build prints a one-line summary per session to stderr (messages, subagents, linked sessions, milestones, cost). To stdout it prints the output path, then `url: file://…`. Use the summary in your reply.
 
 **Map-making is left out by default.** A turn that runs this skill, through `/session-map`, the Skill tool or the skill's instructions loading, doesn't count. From that point to the end of the turn, its time, cost, tool calls, milestones and the user's `/session-map` message are removed. On the map it shows as a dashed outline on the main line. The summary adds a "left out N map-making turn(s)" line. Add `--include-map-work` only when the user wants that work counted ("include the map runs", "count everything"). Running the script by hand doesn't trigger this, so a session spent developing this skill still counts as real work.
 
 ## Choose what the user asked for
 
-**Show it (default)**: build into the scratchpad directory (or the working directory if there is none), then publish:
+**Show it (default)**: publish it as a private Artifact when this session can, and show it locally when it can't. Some organizations turn Artifacts off.
 
-```bash
-python3 $SM "auth refactor" current -o <scratchpad>/session-map-<slug>.html
-```
+1. **Decide whether to try publishing.** Skip straight to step 3 if:
+   - this session has no Artifact tool, or
+   - `python3 $SM --publish-status` prints `blocked`.
 
-Publish with the Artifact tool: `icon: "map"`, and a one-sentence description naming the sessions. Run `python3 $SM --history` first. If the same sessions were published before, pass that URL as `url` to update it in place; read the artifact first, as the tool requires. After publishing, record the link so later sessions can find it:
+   `unknown` or `ok` means try. A `blocked` note expires after a week and reads `unknown` again, so a policy change gets noticed.
 
-```bash
-python3 $SM --record-artifact <url> --sessions "<selectors joined by ' + '>" --file <the html path>
-```
+2. **Publish.** Build into the scratchpad directory (or the working directory if there is none):
+
+   ```bash
+   python3 $SM "auth refactor" current -o <scratchpad>/session-map-<slug>.html
+   ```
+
+   Run `python3 $SM --history`. If the same sessions were published before, pass that URL as `url` to update it in place; read the artifact first, as the tool requires. Publish with `icon: "map"` and a one-sentence description naming the sessions. Then:
+   - **On success**, record the link, which also marks publishing as working:
+
+     ```bash
+     python3 $SM --record-artifact <url> --sessions "<selectors joined by ' + '>" --file <the html path>
+     ```
+
+   - **If the publish is refused** because Artifacts or publishing are disabled, not allowed, or blocked by an organization or admin policy, record that, then continue with step 3:
+
+     ```bash
+     python3 $SM --note-publish blocked --reason "<the error, briefly>"
+     ```
+
+     Other failures, such as a version conflict or a missing file, aren't a policy block. Fix those and publish again.
+
+3. **Show it locally.** Build into the project with `--here`. That writes to `./.session-map/`, a folder that ignores itself in git and that purge cleans up:
+
+   ```bash
+   python3 $SM "auth refactor" current --here
+   ```
+
+   The script prints the file path, then a line starting `url: file://…`. Then:
+   - **Open it in the Claude app's browser** when this session has one: `preview_start` with that `file://` URL (the tool is `mcp__Claude_Browser__preview_start`, or its `remote-devices` equivalent). The map only works there when the file is inside the session's project folder, which is why step 3 uses `--here` and not the default maps folder. Files outside the project open as static snapshots, and the map stays blank.
+   - **Without an in-app browser** (for example in a terminal), add `--open` to the build to open the system browser instead.
+   - **In your reply**, always give two links:
+     - `[Open in your browser](<the file:// URL>)`: a click or Cmd-click opens it in the system browser.
+     - The path relative to the working directory, for example `[.session-map/<file>.html](.session-map/<file>.html)`, which opens it in the app.
+
+     Say in one line that publishing isn't available for this account, so the map is local. Say it only the first time in a conversation.
 
 **Save it as a file** ("save", "export", "download", "give me the HTML"): write it where the user says. With no place named, use `~/Downloads`, since a folder works as `-o`. Don't publish unless they also asked to see it there. Saved files are kept by a plain purge.
 
